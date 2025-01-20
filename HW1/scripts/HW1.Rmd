@@ -1,0 +1,152 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW1 - Linear Model and ANOVA
+output: 
+  html_document:
+    toc: true
+    
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load Libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(ghibli)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(ggResidpanel) #residual panel
+```
+
+
+## Load Data
+```{r}
+bird <- read_csv(here("HW1", "data", "foraging.height.csv"))
+```
+
+## Data clean-up
+```{r}
+bird <- clean_names(bird)
+bird <- bird %>% select (-x1) %>% 
+  mutate(date = mdy(date),
+         kipuka = factor(kipuka),
+         rat_removal = factor(rat_removal)) %>% 
+  filter(species != "OMAO", species != "HAEL")
+```
+## Question 1: How many observations are there of each bird species in each experimental treatment?
+
+```{r}
+bird %>% group_by(species, rat_removal) %>% summarize(n = n())
+```
+### Make a boxplot or violinplot to show the distribution of foraging heights of each bird species in each experimental treatment. What have you learned so far?
+```{r}
+ggplot(bird, aes(x= species, y = foraging_ht_m)) +
+  geom_violin(aes(fill = species))+
+  geom_boxplot(aes(fill = species), width=0.2, color="black", alpha=0.2)+
+  facet_grid(rat_removal~.)+
+  
+  # Making the graph pretty 
+  labs(title = "Foraging height distribution by species and by treatement", 
+       x = "Bird Species", y = "Foraging Height (m)")+
+  theme_bw()+
+  theme(plot.title = element_text(size=16, face = "bold"), 
+        plot.subtitle = element_text(size=15, face = "italic"),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        strip.text.x = element_text(size = 14, face = "bold"),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(size = 12),
+        panel.background = element_rect(fill = "azure1"),
+        legend.position="none") +
+  scale_fill_ghibli_d("SpiritedMedium", direction = -1)
+```
+
+#### Observations
+
+XYZ
+
+## Question 2: Now, make a plot showing the mean foraging height of each bird species in each treatment, and include error bars displaying +/- one standard error of the mean. What is the meaning of the standard error of the mean? How does this plot differ from the plot in #1?  
+
+Standard error is defined as : stderr = std.dev() / sqrt(n)
+
+#### Table summary
+```{r}
+bird %>% group_by(species) %>% 
+  summarise(avg_fr_ht = mean(foraging_ht_m,na.rm = T),
+            std_err = sd(foraging_ht_m, na.rm=T)/sqrt(length(foraging_ht_m)))
+```
+#### Graph
+```{r}
+bird %>% group_by(species) %>% 
+  summarise(avg_fr_ht = mean(foraging_ht_m,na.rm = T),
+            std_err = sd(foraging_ht_m, na.rm=T)/sqrt(length(foraging_ht_m))) %>% 
+  ggplot(aes(x=species, y= avg_fr_ht))+
+  geom_point()+
+  geom_errorbar(aes(ymin = avg_fr_ht-std_err, ymax = avg_fr_ht+std_err),
+                width = 0.1) +
+  
+  # Making the graph pretty 
+  labs(title = "Avg foraging height by species and Standard Error", 
+       x = "Bird Species", y = "Foraging Height (m)")+
+  theme_bw()+
+  theme(plot.title = element_text(size=16, face = "bold"), 
+        plot.subtitle = element_text(size=15, face = "italic"),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        strip.text.x = element_text(size = 14, face = "bold"),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(size = 12),
+        panel.background = element_rect(fill = "azure1"),
+        legend.position="none") +
+  scale_fill_ghibli_d("SpiritedMedium", direction = -1)
+  
+```
+
+
+## Question 4: Fit a linear model that tests whether the bird species differ in foraging height, whether the rat removal treatment affects foraging height, and whether the effect of the rat removal differs between the bird species.
+
+Make plots to assess the distribution of the residuals. Report F-tests for the terms of the model. Create an effects plot displaying the fitted effects. How do you interpret the results? What are the magnitudes of the effects?
+
+
+### Linear model of the data 
+```{r}
+forg_height_lm <- lm(foraging_ht_m ~ species + rat_removal + species:rat_removal,
+                     data = bird)
+
+summary(forg_height_lm)
+```
+
+
+```{r}
+Anova(forg_height_lm)
+```
+
+```{r}
+plot(ggeffect(forg_height_lm, terms = "species"))
+```
+
+```{r}
+resid_panel(forg_height_lm, plots= c("resid", "qq", "lev", "hist"))
+```
+
+
+```{r}
+plot(ggeffect(forg_height_lm, terms = c("species", "rat_removal")))
+```
+
+
+
+
+
+
+
