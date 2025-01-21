@@ -5,7 +5,6 @@ title: HW1 - Linear Model and ANOVA
 output: 
   html_document:
     toc: true
-    
 ---
 
 ```{r setup, include = FALSE}
@@ -14,46 +13,69 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 ## Load Libraries
+
 ```{r}
 # Data manipulation and visualization 
 library(tidyverse)
 library(here)
 library(janitor)
 library(ghibli)
+library(gt)
 
 # Data analysis/statistics 
 library(car) #ANOVA
 library(ggeffects)
 library(effects) #dependency for ggeffects
 library(ggResidpanel) #residual panel
+library(GGally)
 ```
 
-
 ## Load Data
+
 ```{r}
 bird <- read_csv(here("HW1", "data", "foraging.height.csv"))
 ```
 
 ## Data clean-up
-```{r}
-bird <- clean_names(bird)
-bird <- bird %>% select (-x1) %>% 
-  mutate(date = mdy(date),
-         kipuka = factor(kipuka),
-         rat_removal = factor(rat_removal)) %>% 
-  filter(species != "OMAO", species != "HAEL")
-```
-## Question 1: How many observations are there of each bird species in each experimental treatment?
 
 ```{r}
-bird %>% group_by(species, rat_removal) %>% summarize(n = n())
+bird <- clean_names(bird) # transforms column names in R friendly format
+bird <- bird %>% 
+  select (-x1) %>% 
+  mutate(date = mdy(date), # correct date format 
+         kipuka = factor(kipuka), # make kipuka name a factor
+         rat_removal = factor(rat_removal, levels= c("untreated", "treated"))) %>% # make treatment status a factor
+  filter(species != "OMAO", species != "HAEL") # species not included in the HW
 ```
-### Make a boxplot or violinplot to show the distribution of foraging heights of each bird species in each experimental treatment. What have you learned so far?
+
+## Question 1
+
+-   How many observations are there of each bird species in each experimental treatment?
+
+### Summary Table
+
+The number of observations is given in the data table below. We can note that APAP species has overall a greater number of observations compared to other bird species.
+
 ```{r}
-ggplot(bird, aes(x= species, y = foraging_ht_m)) +
+bird %>% group_by(species, rat_removal) %>% 
+  summarize(n = n()) %>% #gives the number of data point in designated categories
+  ungroup() %>% 
+  gt() %>% 
+  tab_header(title = "Data Summary of Birds Species by Treatment") %>% 
+  cols_label(species = "Species",
+             rat_removal = "Rat Removal",
+             n = "Number of data point (n)")
+```
+
+### Plots
+
+Make a boxplot or violinplot to show the distribution of foraging heights of each bird species in each experimental treatment. What have you learned so far?
+
+```{r, fig.height= 6, fig.width= 10}
+ggplot(bird, aes(x= rat_removal, y = foraging_ht_m)) +
   geom_violin(aes(fill = species))+
   geom_boxplot(aes(fill = species), width=0.2, color="black", alpha=0.2)+
-  facet_grid(rat_removal~.)+
+  facet_grid(.~species)+
   
   # Making the graph pretty 
   labs(title = "Foraging height distribution by species and by treatement", 
@@ -71,32 +93,39 @@ ggplot(bird, aes(x= species, y = foraging_ht_m)) +
   scale_fill_ghibli_d("SpiritedMedium", direction = -1)
 ```
 
-#### Observations
+### Answer
 
-XYZ
+-   **General observation**: All bird species in the treatment groups can be observed at lower foraging heights compared to untreated areas.
+-   **Foraging range**: The effect of the treatment seem to be especially beneficial to IIWI and JAWE because their foraging range has increase more than the other 2 species. HAAM also benefited from rat removal but the effect of the treatment is lesser than IIWI and JAWE. APAP has experienced an increased in foraging range but to a lesser extend than the other species.
+-   **Median**: Although the overall foraging range has increased for JAWE and IIWI, the median foraging height still remains constant between treated and untreated areas. APAP and HAAM may not have experienced large increase in foraging range, but the median foraging range is lower in treated areas compared to untreated areas. This may indicated that APAP and HAAM and decreasing their foraging height in the absence of rats.
 
-## Question 2: Now, make a plot showing the mean foraging height of each bird species in each treatment, and include error bars displaying +/- one standard error of the mean. What is the meaning of the standard error of the mean? How does this plot differ from the plot in #1?  
+## Question 2
 
-Standard error is defined as : stderr = std.dev() / sqrt(n)
+-   Make a plot showing the **mean foraging height** of each bird species in each treatment, and include error bars displaying +/- one standard error of the mean.
+-   What is the meaning of the standard error of the mean? How does this plot differ from the plot in #1?
 
-#### Table summary
+### Table summary
+
 ```{r}
-bird %>% group_by(species) %>% 
+bird %>% group_by(species, rat_removal) %>% 
   summarise(avg_fr_ht = mean(foraging_ht_m,na.rm = T),
             std_err = sd(foraging_ht_m, na.rm=T)/sqrt(length(foraging_ht_m)))
 ```
-#### Graph
+
+### Plots
+
 ```{r}
-bird %>% group_by(species) %>% 
+bird %>% group_by(species, rat_removal) %>% 
   summarise(avg_fr_ht = mean(foraging_ht_m,na.rm = T),
             std_err = sd(foraging_ht_m, na.rm=T)/sqrt(length(foraging_ht_m))) %>% 
-  ggplot(aes(x=species, y= avg_fr_ht))+
-  geom_point()+
+  ggplot(aes(x=rat_removal, y= avg_fr_ht, color = species))+
+  geom_point(size = 4)+
   geom_errorbar(aes(ymin = avg_fr_ht-std_err, ymax = avg_fr_ht+std_err),
-                width = 0.1) +
+                width = 0.2, linewidth = 1) +
+  facet_wrap(.~species, nrow = 1) +
   
   # Making the graph pretty 
-  labs(title = "Avg foraging height by species and Standard Error", 
+  labs(title = "Avg foraging height by species by treatment and standard error", 
        x = "Bird Species", y = "Foraging Height (m)")+
   theme_bw()+
   theme(plot.title = element_text(size=16, face = "bold"), 
@@ -108,41 +137,138 @@ bird %>% group_by(species) %>%
         legend.text = element_text(size = 12),
         panel.background = element_rect(fill = "azure1"),
         legend.position="none") +
-  scale_fill_ghibli_d("SpiritedMedium", direction = -1)
+  scale_color_ghibli_d("SpiritedMedium", direction = -1)
   
 ```
 
+### Answer
 
-## Question 4: Fit a linear model that tests whether the bird species differ in foraging height, whether the rat removal treatment affects foraging height, and whether the effect of the rat removal differs between the bird species.
+-   Standard error of the mean is a measure of how different the mean of a sample would be compared to the mean of the population from which the sample was taken from. It is calculated using the formula: stderr = std.dev() / sqrt(n)
+-   Violin and box plots show the distribution of a data set, displaying summary statistics such as the range (max and min), the median, the quantiles (25% and 75%) as well as potential outliers.\
+-   The plot below shows the mean and the standard error. The mean is a measure of central location, i.e., on average at what foraging height are bird species feeding in treated and untreated areas.\
+-   We can see that the average graph show a clearer trend than the box plots. It looks like on average, the removal of rats in a kipuka allows bird species to forage at a lower height than in untreated areas.\
+-   We can also see that the error bars are not the same length in all categories. It looks like categories with more data point experience lower error bars compared to categories with fewer data points.
 
-Make plots to assess the distribution of the residuals. Report F-tests for the terms of the model. Create an effects plot displaying the fitted effects. How do you interpret the results? What are the magnitudes of the effects?
+## Question 3
 
+-   Fit a linear model that tests whether the bird species differ in foraging height, whether the rat removal treatment affects foraging height, and whether the effect of the rat removal differs between the bird species.
 
-### Linear model of the data 
+-   Make plots to assess the distribution of the residuals. Report F-tests for the terms of the model. Create an effects plot displaying the fitted effects. How do you interpret the results? What are the magnitudes of the effects?
+
+### Linear model including interaction term
+
+This model used the foraging height as a response (depend) variable. We will be using the species, the treatment (rat removal) and the interaction between species and treatment to see how those affect the foraging height.
+
 ```{r}
+
 forg_height_lm <- lm(foraging_ht_m ~ species + rat_removal + species:rat_removal,
                      data = bird)
+# also, forg_height_lm <- lm(foraging_ht_m ~ species*rat_removal, data = bird)
 
 summary(forg_height_lm)
 ```
 
-
-```{r}
-Anova(forg_height_lm)
-```
-
-```{r}
-plot(ggeffect(forg_height_lm, terms = "species"))
-```
+#### Residual panel: Distribution of the residuals
 
 ```{r}
 resid_panel(forg_height_lm, plots= c("resid", "qq", "lev", "hist"))
 ```
 
+#### Performing an ANOVA (Type II tests): F-test results
+
+F values can be found in the table below
+
+```{r}
+Anova(forg_height_lm)
+```
+
+#### Effects plot
 
 ```{r}
 plot(ggeffect(forg_height_lm, terms = c("species", "rat_removal")))
 ```
+
+## Answer
+
+-   **Residual plot**: the residuals of the data are spread evenly which respects the statistical assumption of independent distribution. The linear model is therefore robust in that sense.
+
+-   **F-test**: F values are a ratio of the variation between means and the variance within groups. F= Var(btwn group means)/Var(within a group). A larger F value indicates that the variance between groups is great than the variance that occur within a group.
+
+    -   **Species**: F= 5 and p \< 0.05. The variation of foraging height among bird species is greater than the random variation within a species. The p-value indicates that the probability of occurrence of the null hypothesis is less than 0.05, i.e., the results are significant; ***the mean foraging height is significantly different between bird species***.
+    -   **Rat removal**: F= 16.1 and p \<0.05. The variation between treatment groups is much greater than the variation that occur within a treatment group. The p-value indicate significant results (reject null hypothesis). ***The removal of rats significant changes the foraging height of the bird species.***
+
+-   **Effects plot**: The effects plot show the predicated values based on the bird species and the treatment groups. For all bird species, there is a visible difference between the treatment groups. Predicated values show that the removal of rats with lower the foraging height of birds. JAWE will experience the largest change in predicated foraging height, IIWI an HAAM will experience the same predicated changes. APAP will also see its predicted values to decrease but in a lesser way than other species.
+
+-   **Magnitude of the effects**
+
+    -   **speciesHAAM**: foraging height decreased by 0.9253m compared to APAP.
+    -   **speciesIIWI**: foraging height increased by 1.7836m compared to APAP.\
+    -   **speciesJAWE**: foraging height decreased by 0.1713m compared to APAP.
+    -   **rat_removaltreated**: foraging height decreased by 1.5426m in treated plots.
+    -   **speciesHAAM:rat_removaltreated**: the foraring height decreased by 0.1377m in HAAM in treated plots compared to APAP in untreated plots
+    -   **speciesIIWI:rat_removaltreated**: the foraging height decreased by 0.2512m in IIWI in treated plots compared to APAP in untreated plots
+    -   **speciesJAWE:rat_removaltreated**: the foraging height decreased by 2.4428m in JAWE in treated plots compared to APAP in untreated plots
+
+The magnitude can be better visualized in the following graph.
+```{r}
+ggcoef(forg_height_lm)
+```
+
+## Question 4
+
+- We have not considered the role of kipuka size, or the role of food availability (which is influenced in part by kipuka size).
+-   Make a new model that adds kipuka area and arthopod biomass as predictors, and include interactions that test whether the treatment effect depends on these additional predictors.
+-   Report F-tests and effects plots. How do the results of this model differ from the model in #3? How do you interpret the results at this stage?
+
+### Exploratory scatter plots
+#### Non-transformed data
+
+- **Residual-Leverage Plot**: the data seems to be evenly distributed on each side of the horizontal line (vertically) which respects the linearity principle. However, the residual points are not distributed even horizontally. This may indicate that the data is skewed.
+- **Residual-Leverage Plot**: The residuals are clustered on the left side of the graph and there are outlier points that are located far from the rest of the cluster. One data point is located poast a Cook's distance contour line indicating an outlier. 
+- **Conclusion**: Transforming the data is necessary.
+
+```{r}
+forg_kipuka_arth <- lm(foraging_ht_m ~ area_ha*tot_arth_bm,
+                     data = bird)
+
+summary(forg_kipuka_arth)
+resid_panel(forg_kipuka_arth, plots= c("resid", "qq", "lev", "yvp"))
+```
+
+#### Log10-transformed data
+
+Log-transforming the data allowed to even distribute the residual points horizontally on the Residual Plot. In the Residual-Leverage plot, the data is still clustered to the left but less than before and no point is crossing a Cook's distance contour line.
+```{r}
+
+forg_kipuka_arth <- lm(foraging_ht_m ~ area_ha*log10(tot_arth_bm),
+                     data = bird)
+
+summary(forg_kipuka_arth)
+resid_panel(forg_kipuka_arth, plots= c("resid", "qq", "lev", "yvp"))
+
+```
+
+
+### Setting the new model
+
+```{r}
+forg_4var_lm <- lm(foraging_ht_m ~ species*rat_removal + area_ha*rat_removal + log(tot_arth_bm)*rat_removal, data = bird)
+
+# here, we have 3 predictors: species, treatment (rat_removal), kipuka size (area_ha) and insect biomass (tot_arth_bm). 
+
+# we are also looking at the interactions:
+## does the treatment affect bird species differently?
+## does the treatment affect the the insect biomass? 
+## does the treatment change with kipuka size ? 
+
+summary(forg_4var_lm)
+```
+
+
+
+
+
+
 
 
 
