@@ -254,25 +254,77 @@ resid_panel(forg_kipuka_arth, plots= c("resid", "qq", "lev", "yvp"))
 ```{r}
 forg_4var_lm <- lm(foraging_ht_m ~ species*rat_removal + area_ha*rat_removal + log(tot_arth_bm)*rat_removal, data = bird)
 
-# here, we have 3 predictors: species, treatment (rat_removal), kipuka size (area_ha) and insect biomass (tot_arth_bm). 
+# here, we have 4 predictors: species, treatment (rat_removal), kipuka size (area_ha) and insect biomass (tot_arth_bm). 
 
-# we are also looking at the interactions:
-## does the treatment affect bird species differently?
-## does the treatment affect the the insect biomass? 
-## does the treatment change with kipuka size ? 
+# we are also looking at their interactions:
+## do bird species benefit more form rat removal?
+## is the change in foraging height from rat removal enhanced/limited by insect biomass?
+## does the rat removal effect depend on kipuka size? 
 
 summary(forg_4var_lm)
 ```
 
+### Anova() : F-test
+
+F-test results can be seen below.
+```{r}
+Anova(forg_4var_lm)
+```
+
+### Effects plots
+
+```{r}
+plot(ggeffect(forg_4var_lm, terms = c("area_ha", "species", "rat_removal")))
+```
 
 
+```{r}
+plot(ggeffect(forg_4var_lm, terms = c("tot_arth_bm", "species", "rat_removal")))
+```
 
 
+### Answer
+
+Adding kipuka areas and arthropod biomass changed the results of the **F-test**.  
+
+- Variation in foraging height was small in magnitude between bird species and was not significant. 
+- Rat removal treatment did not cause significant and notable different in foraging height.
+- Foraging heights vary greatly and significantly due to the surface areas of the kipuka. 
+- Arthropod biomass cause significant and notable differences in foraging heights.
+- Interaction terms did not show significant interaction between the predictors selected.
+
+The **effects plot** on the other hand seem to be telling a different story.
+
+- Rat removal decreased the foraging height
+- Bird species are not affected the same. Some species have a higher foraging height compared to others
+- Increasing the surface area of kipuka increased the foraging height linearly. 
+- Increasing the arthropod biomass increases the foraging height but logarithmically. 
+
+Note: I'm very unsure about those results and interpretation...
+
+## Question 5
+
+Add DATE as a factor to the linear model from #4. How does the inclusion of the date of sampling alter the model results? Why do you think that is?
+
+### Setting up the model
+```{r}
+forg_5var_lm <- lm(foraging_ht_m ~ species*rat_removal + area_ha*rat_removal + log(tot_arth_bm)*rat_removal + date, data = bird)
 
 
+summary(forg_5var_lm)
+```
 
+### Answer 
 
-
+The date of sampling impact the model significantly based on the t-test.  
+This is may be due to the way data was gathered. It looks like (table below) one date corresponded to the sampling in a specific treatment area. The data is not distributed equally in that regard.  
+The average foraging height also differs between date as well. I did not include the date as an interaction term in the linear model, therefore maybe there is a date interaction that is not accounted for in the statics. 
+```{r}
+bird %>% group_by(date, rat_removal) %>% drop_na(date) %>% 
+  summarise(n=n(),
+            avg_for_ht = mean(foraging_ht_m, na.rm = T)) %>% ungroup() %>% 
+  gt()
+```
 
 
 
