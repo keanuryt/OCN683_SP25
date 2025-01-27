@@ -1,0 +1,133 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW2 - Contrasts
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load Libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(ghibli)
+library(gt)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(ggResidpanel) #residual panel
+library(GGally)
+library(emmeans)
+```
+
+
+## Load Data
+```{r}
+mesocosm <- read_csv(here("HW2", "data", "HW2_data.csv"))
+```
+
+```{r}
+# rename column name for readability
+mesocosm<- mesocosm %>%  clean_names() %>% 
+  rename(np_ratio = nto_pratio)
+```
+
+## Question 1
+
+Create a linear model that tests whether richness is explained by nutrient level and/or food web treatment, and whether the effect of food web treatment differs between nutrient levels, while also accounting for the blocked structure of the experiment. Why is it important to account for the blocks? Analyze the results of the linear model as we did in Homework 1. What is your interpretation of these results so far?
+
+### Creating a linear model
+
+```{r}
+mesocosm_q1_lm <- lm(phyto_chao1 ~ nutrient_level*food_web + block, data = mesocosm)
+
+summary(mesocosm_q1_lm)
+```
+
+#### ANOVA()
+```{r}
+Anova(mesocosm_q1_lm)
+```
+#### Effects plot
+```{r}
+plot(ggeffect(mesocosm_q1_lm, terms = c("nutrient_level", "block","food_web" )))
+```
+
+#### Residual Plots
+```{r}
+resid_panel(mesocosm_q1_lm, plots = c("resid", "qq", "lev", "hist"))
+```
+
+
+### Answer
+
+- In experimental settings or surveys, environmental conditions may differ from one area to another, one tank to another...etc. **Blocking** allows to evaluate the samples by controlling non-independent variables.
+- **F-test**: the results of the ANOVA indicate at significant difference between nutrient level groups and food web groups (F=7 and p<0.05 for both).
+- **Effects plot**: it shows the same pattern within the groups of nutrient levels. The effect is the same across block number and within blocks. The effect of the food webs affects the estimated values of the taxonomic richness. 
+- **Residuals**: The residuals are well distributing in the residual plot indicating a independen distribution. 
+
+## Question 2
+
+We would like to know specifically whether the grazer treatment (G) has greater richness than the algae treatment (A), and whether the effect of grazers differs between high and low nutrient levels (we think the effect of grazers on coexistence may be greater at high nutrient loading).
+
+### Setting up the model
+```{r}
+mesocosm_q2_lm <- lm(phyto_chao1 ~ food_web*nutrient_level, data = mesocosm )
+
+summary(mesocosm_q2_lm)
+```
+#### ANOVA and effects plot
+```{r}
+Anova(mesocosm_q2_lm)
+```
+-  Phytoplankton richness differences is significantly explained by food wed structure (F = 6.90, p<0.05) and nutrient levels (F = 7.31, p<0.05). 
+- There is no significant interactions between food web structure and nutrient levels according to the ANOVA. 
+
+
+```{r}
+plot(allEffects(mesocosm_q2_lm))
+```
+
+- At both nutrient levels (high and low), the pattern of phyto-chao1 is similar. 
+- In high nutrients, G (algae+grazer) results in the highest phyto-chao1. Adding predators brings phyto-chao1 to the the algae only scenario
+- In low nutrients. The pattern is similar but in P, phyto-chao1 decreases to a magnitude intermidiate to A and G. 
+
+### Running the emmeans 
+
+**Emmeans**: also "Least Square Means". The means for each group/level of a factor, calculated while holding any covariates constant at their mean value (or some other predefined value).
+
+```{r}
+emmeans(mesocosm_q2_lm, specs = trt.vs.ctrl~ food_web*nutrient_level)
+```
+
+
+### Setting up contrasts
+Now define contrasts to test (1) whether G is different from A in the H treatment, (2) whether G is different from A in the L treatment, and (3) whether G is different from A when averaging over the L and H treatments.
+
+**Questions for Kyle:**
+- Do I just filter my data frame to keep only H and L nutrient samples, run  2 new models and do the contrast that way ? 
+- For part 3, do I do the average of the food web values to remove the nutrient level variation and run a 3rd model and run the contrasts?
+- Do I filter out P from those models ? It doesn't seem like we care about P in that question. Does it change the stats? 
+
+```{r}
+pairs(emmeans(mesocosm_q2_lm, c("food_web", "nutrient_level")))
+```
+
+```{}
+contrast(emmeans(mesocosm_q2_lm, specs = ~ food_web*nutrient_level),
+         method = list(""))
+```
+
+
+
+
