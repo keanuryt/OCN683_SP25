@@ -19,10 +19,19 @@ library(tidyverse)
 library(here)
 library(janitor)
 library(ghibli)
+library(RColorBrewer)
 library(gt)
 library(gtExtras)
 
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(ggResidpanel) #residual panel
+library(GGally)
+
 ```
+
 
 ## Load Data 
 ```{r}
@@ -34,6 +43,7 @@ fish <- fish %>% clean_names()
 ```
 
 ```{r}
+# I will be using the same theme elements for all my plots to I can automate it using this 
 nunu_theme <- theme_bw() + 
   theme(plot.title = element_text(size=14, face = "bold"), 
         plot.subtitle = element_text(size=12),
@@ -48,7 +58,10 @@ nunu_theme <- theme_bw() +
 
 ## Question 1: summary statistics 
 
+_Identify the top twelve species in terms of these three statistics: (1) mean abundance, (2) maximum abundance, (3) standard deviation of abundance. In other words, which species are most abundant on average, which reach the highest abundances, and which have the most variable abundances?_
+
 ```{r}
+# create a summary table with average abundance, the max count and the standard deviation
 fish_summary_stats <- fish %>% group_by(taxonname) %>% 
   summarize(avg = mean(count, na.rm = T),
             max_abun = max(count, na.rm = T),
@@ -58,6 +71,7 @@ fish_summary_stats <- fish %>% group_by(taxonname) %>%
 ### A- Top 12 fish species in mean abundance
 
 ```{r}
+# arrange the average abundance in decreasing order and keep the top 12
 fish_summary_stats %>% arrange(desc(avg)) %>% 
   head(12) %>% gt() %>% 
   gt_highlight_cols(avg,  fill= "orange", alpha = 0.4)
@@ -65,21 +79,24 @@ fish_summary_stats %>% arrange(desc(avg)) %>%
 
 ### B- Top 12 fish species in max abundance
 ```{r}
+# arrange the max abundances in decreasing order and keep the top 12
 fish_summary_stats %>% arrange(desc(max_abun)) %>% 
   head(12) %>% gt() %>% 
   gt_highlight_cols(max_abun,  fill= "orange", alpha = 0.4)
 ```
 ### C- Top 12 fish species in highest standard deviation
 ```{r}
+# arrange the standard deviations in decreasing order and keep the top 12
 fish_summary_stats %>% arrange(desc(std_dev)) %>% 
   head(12) %>% gt() %>% 
   gt_highlight_cols(std_dev,  fill= "orange", alpha = 0.4)
 ```
 
 ## Question 2: Depth 
-Using the top twelve species based on mean abundance, plot a scatterplot of count vs. depth (the column is named ‘depth’). Add a smoother to help visualize mean count vs. depth, put all twelve species on a single plot (with twelve panels), and make sure each panel is titled using the species name. Furthermore, do not arrange the panels in alphabetical order — instead, arrange them in order of mean abundance, so that the most abundant species is in the top left panel, and remaining panels are in order of mean abundance. Do it in a for loop and in ggplot.  
+__Using the top twelve species based on mean abundance, plot a scatterplot of count vs. depth (the column is named ‘depth’). Add a smoother to help visualize mean count vs. depth, put all twelve species on a single plot (with twelve panels), and make sure each panel is titled using the species name. Furthermore, do not arrange the panels in alphabetical order — instead, arrange them in order of mean abundance, so that the most abundant species is in the top left panel, and remaining panels are in order of mean abundance. Do it in a for loop and in ggplot.__
 
 ```{r}
+# arrange the average abundance in decreasing order and keep the top 12 name of fish species
 top_avg_abun <- fish_summary_stats %>% arrange(desc(avg)) %>% 
   head(12) %>%  pull(taxonname)
 ```
@@ -87,25 +104,29 @@ top_avg_abun <- fish_summary_stats %>% arrange(desc(avg)) %>%
 ### Graph with a for loop 
 
 ```{r, warning= FALSE, fig.width= 12, fig.height=6}
-par(mfrow= c(3,4))
+#for loop to graph the correlation between fish count and depth
+
+par(mfrow= c(3,4)) #creates a panel of 3cols x 4rows figure
 for(i in 1:length(top_avg_abun)){
   
-  data <- fish[fish$taxonname == top_avg_abun[i],]
+  data <- fish[fish$taxonname == top_avg_abun[i],] #filters the fish species based on their order form highest to lowest average abundance
   
-  plot(sqrt(count) ~ depth, data = data, 
-       col = "#616161",
-       main = top_avg_abun[i])
+  plot(sqrt(count) ~ depth, data = data, # sqrt transform the count and compare to depth
+       col = "#616161", # change color of the points
+       main = top_avg_abun[i]) # specify the title of the plot to be fish species name
   
    with(data, lines(loess.smooth(depth,sqrt(count)), col = "blue", lwd = 3))
+   # creates the trend line with specific color and linewidth
   
 }
-
 
 ```
 
 
 ### Graphing with ggplot 
 ```{r, fig.width= 12, fig.height=6}
+#plot the correlation between fish count and depth with ggplot 
+
 fish %>% filter(taxonname %in% top_avg_abun) %>% 
   mutate(taxonname = fct_reorder(taxonname, 
                                  .x= count, .fun = mean,
@@ -122,6 +143,7 @@ fish %>% filter(taxonname %in% top_avg_abun) %>%
 ```
 
 ```{r}
+# name of the top 12 fish species
 top_avg_abun
 ```
 
@@ -137,33 +159,83 @@ Fish species seem to have particular depth preference:
 ## Question 3
 
 ```{r}
-top_abun_fish <- fish_summary_stats %>% arrange(desc(max_abun)) %>% 
+# create a vector that keep only the name of the top 5 most abundant fish species on average 
+top_abun_fish <- fish_summary_stats %>% arrange(desc(avg)) %>% 
   head(5) %>%  pull(taxonname)
 ```
 
-### A- Plotting the most abundant species
+### A- Plotting the most abundant species (on average)
 
 _Make a new plot that shows abundance vs. depth for the top 5 species, including smoothers, but this time put all of the species on the same scatterplot and distinguish them with different colors. This time you don’t need to use two different approaches to make the plot — one approach will suffice. What is your interpretation of this plot?_
 
 ```{r fig.width= 12, fig.height=6}
-fish %>% filter(taxonname %in% top_abun_fish) %>% 
+
+fish %>% filter(taxonname %in% top_abun_fish) %>% #keeping only the top 12 most abundant fish 
   mutate(taxonname = fct_reorder(taxonname, 
-                                 .x= count, .fun = max,
-                                 .desc = TRUE)) %>% 
+                                 .x= count, .fun = mean,
+                                 .desc = TRUE)) %>% #order the taxoname by abundance
   ggplot(aes(x= depth, y = count,
              color = taxonname, group = taxonname))+
   geom_point()+
-  geom_smooth(method = "loess")+
-  #scale_color_ghibli_d("SpiritedMedium")+
-  scale_y_sqrt()+
+  geom_smooth(method = "loess")+ # choose smoothing method
+  scale_color_brewer(palette = "Set1")+ # choose colot palette
+  scale_y_sqrt()+ # sqrt transform the y axis
   nunu_theme
 ```
 
+#### Answer
 Looking at the trend lines, it looks like fish species have different depth preference. It appears to be sequential as well.  
-- Chromis vanderbilti seem to be most abundant at the surface. 
-- Chromis agilis
+
+- **Chromis vanderbilti**'s abundance is more correlated to the surface (0-20m). 
+- **Chromis agilis**'s abundance correlates with deeper depth (15-25m).
+- **Ctenochaetus strigosus** also prefers mid to deeper depth, with a maximum at around 20m, but the overall trend it fairly flat.
+- **Zebrasoma flavescens** & **Acanthurus nigrofuscus**'s abundances does not seem to correlate with a particular depth. 
+
+It looks like the top most abundant fish species have a preference in depth of occurrence. Theure seem to be a sequential distribution of the fish species with depth, as if each species is more predominant in their "territory". However some exception exist such as Chromis ovalis, which seem to be occurring homogeneously across depth. 
+
+### B- Linear model 
+
+_Fit a linear model that tests whether these 5 species have different depth niches. Based on residual diagnostic plots of this model, and a plot of the fitted effects, do you think a linear model is a good approach for testing this question? If not, why not?_
+
+```{r}
+top_5_fish <- fish %>% filter(taxonname %in% top_abun_fish) #only keep the top 5 fish species
+```
 
 
+```{r}
+#setting up a linear model. depth and taxonname are predictors and sqrt(count) is a response variable
+top_fish_lm <- lm(sqrt(count) ~ depth*taxonname, data= top_5_fish)
+
+summary(top_fish_lm)
+```
+
+```{r}
+# Anova show significant differences between fish species and in the interaction between taxonname and depth 
+Anova(top_fish_lm) 
+
+```
 
 
+```{r}
+# plot the residuals 
+resid_panel(top_fish_lm, plots = c("resid", "qq", "lev", "hist"))
+```
 
+```{r fig.width=12, fig.height=6}
+# plot the effects plot
+plot(allEffects(top_fish_lm, terms = c("depth", "taxonname")))
+```
+
+```{r}
+# plot the effects plot
+
+plot(ggeffect(top_fish_lm, terms = c("depth", "taxonname")))
+```
+
+
+#### Answer
+
+A linear model might not be the best statistical tool to understand the distribution of fish species with depth.  
+The **residual plot* show that the residual points are not evenly distributed on each side of the line which may indicate that the data point are not independent from one another.  
+The **Q-Q plot** shows that the residual points do not follow a regression line.  
+The **histogram** shows that the data is not distributed normally. 
