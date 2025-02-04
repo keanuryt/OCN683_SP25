@@ -1,0 +1,169 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW3 - Coding practice
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load Libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(ghibli)
+library(gt)
+library(gtExtras)
+
+```
+
+## Load Data 
+```{r}
+fish <- read_csv(here("HW3","data","CRCP_reef_fish.csv"))
+```
+
+```{r}
+fish <- fish %>% clean_names()
+```
+
+```{r}
+nunu_theme <- theme_bw() + 
+  theme(plot.title = element_text(size=14, face = "bold"), 
+        plot.subtitle = element_text(size=12),
+        axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(size = 12),
+        strip.text.x = element_text(size = 12, face = "bold"),
+        legend.title=element_text(size=12, face = "bold"),
+        legend.text=element_text(size=12),
+        #axis.text.x = element_text(angle= 45, hjust= 1),
+        panel.background = element_rect(fill = "azure1"))
+```
+
+## Question 1: summary statistics 
+
+```{r}
+fish_summary_stats <- fish %>% group_by(taxonname) %>% 
+  summarize(avg = mean(count, na.rm = T),
+            max_abun = max(count, na.rm = T),
+            std_dev = sd(count, na.rm = T))
+```
+
+### A- Top 12 fish species in mean abundance
+
+```{r}
+fish_summary_stats %>% arrange(desc(avg)) %>% 
+  head(12) %>% gt() %>% 
+  gt_highlight_cols(avg,  fill= "orange", alpha = 0.4)
+```
+
+### B- Top 12 fish species in max abundance
+```{r}
+fish_summary_stats %>% arrange(desc(max_abun)) %>% 
+  head(12) %>% gt() %>% 
+  gt_highlight_cols(max_abun,  fill= "orange", alpha = 0.4)
+```
+### C- Top 12 fish species in highest standard deviation
+```{r}
+fish_summary_stats %>% arrange(desc(std_dev)) %>% 
+  head(12) %>% gt() %>% 
+  gt_highlight_cols(std_dev,  fill= "orange", alpha = 0.4)
+```
+
+## Question 2: Depth 
+Using the top twelve species based on mean abundance, plot a scatterplot of count vs. depth (the column is named ‘depth’). Add a smoother to help visualize mean count vs. depth, put all twelve species on a single plot (with twelve panels), and make sure each panel is titled using the species name. Furthermore, do not arrange the panels in alphabetical order — instead, arrange them in order of mean abundance, so that the most abundant species is in the top left panel, and remaining panels are in order of mean abundance. Do it in a for loop and in ggplot.  
+
+```{r}
+top_avg_abun <- fish_summary_stats %>% arrange(desc(avg)) %>% 
+  head(12) %>%  pull(taxonname)
+```
+
+### Graph with a for loop 
+
+```{r, warning= FALSE, fig.width= 12, fig.height=6}
+par(mfrow= c(3,4))
+for(i in 1:length(top_avg_abun)){
+  
+  data <- fish[fish$taxonname == top_avg_abun[i],]
+  
+  plot(sqrt(count) ~ depth, data = data, 
+       col = "#616161",
+       main = top_avg_abun[i])
+  
+   with(data, lines(loess.smooth(depth,sqrt(count)), col = "blue", lwd = 3))
+  
+}
+
+
+```
+
+
+### Graphing with ggplot 
+```{r, fig.width= 12, fig.height=6}
+fish %>% filter(taxonname %in% top_avg_abun) %>% 
+  mutate(taxonname = fct_reorder(taxonname, 
+                                 .x= count, .fun = mean,
+                                 .desc = TRUE)) %>% 
+  ggplot(aes(x= depth, y = count)) +
+  geom_point(alpha = 0.7)  +
+  geom_smooth(linewidth = 2)+
+  facet_wrap(.~taxonname, scales = "free")+
+ scale_y_sqrt() +
+  labs(x= "Depth (m)",
+       y = "Count (sqrt)")+
+  nunu_theme
+  
+```
+
+```{r}
+top_avg_abun
+```
+
+
+### Answer
+
+Fish species seem to have particular depth preference:
+
+- **Surface**: Acanthurus nigrofuscus, Zebrasoma flavescens, Acanthurus leucopareius, Thalassoma duperrey.
+- **Mid-depth**: Chromis vanderbilti, Chromis agilis, Ctenochaetus strigosus, Paracirrhites arcatus, Acanthurus leucopareius, Decapterus macarellus.
+- **Deep**: Lutjanus kasmira, Pristiapogon kallopterus, Chromis hanui.
+
+## Question 3
+
+```{r}
+top_abun_fish <- fish_summary_stats %>% arrange(desc(max_abun)) %>% 
+  head(5) %>%  pull(taxonname)
+```
+
+### A- Plotting the most abundant species
+
+_Make a new plot that shows abundance vs. depth for the top 5 species, including smoothers, but this time put all of the species on the same scatterplot and distinguish them with different colors. This time you don’t need to use two different approaches to make the plot — one approach will suffice. What is your interpretation of this plot?_
+
+```{r fig.width= 12, fig.height=6}
+fish %>% filter(taxonname %in% top_abun_fish) %>% 
+  mutate(taxonname = fct_reorder(taxonname, 
+                                 .x= count, .fun = max,
+                                 .desc = TRUE)) %>% 
+  ggplot(aes(x= depth, y = count,
+             color = taxonname, group = taxonname))+
+  geom_point()+
+  geom_smooth(method = "loess")+
+  #scale_color_ghibli_d("SpiritedMedium")+
+  scale_y_sqrt()+
+  nunu_theme
+```
+
+Looking at the trend lines, it looks like fish species have different depth preference. It appears to be sequential as well.  
+- Chromis vanderbilti seem to be most abundant at the surface. 
+- Chromis agilis
+
+
+
+
+

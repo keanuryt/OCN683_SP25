@@ -40,16 +40,20 @@ mesocosm <- read_csv(here("HW2", "data", "HW2_data.csv"))
 # rename column name for readability
 mesocosm<- mesocosm %>%  clean_names() %>% 
   rename(np_ratio = nto_pratio)
+
+mesocosm <- mesocosm %>%
+  mutate_at(vars(food_web, block, nutrient_level), 
+            as.factor)
 ```
 
-## Question 1
+## Question 1: Create the linear model
 
 Create a linear model that tests whether richness is explained by nutrient level and/or food web treatment, and whether the effect of food web treatment differs between nutrient levels, while also accounting for the blocked structure of the experiment. Why is it important to account for the blocks? Analyze the results of the linear model as we did in Homework 1. What is your interpretation of these results so far?
 
 ### Creating a linear model
 
 ```{r}
-mesocosm_q1_lm <- lm(phyto_chao1 ~ nutrient_level*food_web + block, data = mesocosm)
+mesocosm_q1_lm <- lm(phyto_chao1 ~ nutrient_level*food_web + block, data = mesocosm )
 
 summary(mesocosm_q1_lm)
 ```
@@ -76,58 +80,90 @@ resid_panel(mesocosm_q1_lm, plots = c("resid", "qq", "lev", "hist"))
 - **Effects plot**: it shows the same pattern within the groups of nutrient levels. The effect is the same across block number and within blocks. The effect of the food webs affects the estimated values of the taxonomic richness. 
 - **Residuals**: The residuals are well distributing in the residual plot indicating a independen distribution. 
 
-## Question 2
+## Question 2: A vs G 
 
 We would like to know specifically whether the grazer treatment (G) has greater richness than the algae treatment (A), and whether the effect of grazers differs between high and low nutrient levels (we think the effect of grazers on coexistence may be greater at high nutrient loading).
 
-### Setting up the model
-```{r}
-mesocosm_q2_lm <- lm(phyto_chao1 ~ food_web*nutrient_level, data = mesocosm )
-
-summary(mesocosm_q2_lm)
-```
+### Contrasts
 #### ANOVA and effects plot
 ```{r}
-Anova(mesocosm_q2_lm)
+Anova(mesocosm_q1_lm)
 ```
 -  Phytoplankton richness differences is significantly explained by food wed structure (F = 6.90, p<0.05) and nutrient levels (F = 7.31, p<0.05). 
 - There is no significant interactions between food web structure and nutrient levels according to the ANOVA. 
 
 
 ```{r}
-plot(allEffects(mesocosm_q2_lm))
+plot(allEffects(mesocosm_q1_lm))
 ```
 
 - At both nutrient levels (high and low), the pattern of phyto-chao1 is similar. 
 - In high nutrients, G (algae+grazer) results in the highest phyto-chao1. Adding predators brings phyto-chao1 to the the algae only scenario
-- In low nutrients. The pattern is similar but in P, phyto-chao1 decreases to a magnitude intermidiate to A and G. 
+- In low nutrients. The pattern is similar but in P, phyto-chao1 decreases to a magnitude intermediate to A and G. 
+- Blocks have different predicted richness. 
 
 ### Running the emmeans 
 
-**Emmeans**: also "Least Square Means". The means for each group/level of a factor, calculated while holding any covariates constant at their mean value (or some other predefined value).
+**Emmeans**: also "Least Square Means". The means for each group/level of a factor, calculated while holding any covariates constant at their mean value (or some other predefined value).  
 
 ```{r}
-emmeans(mesocosm_q2_lm, specs = trt.vs.ctrl~ food_web*nutrient_level)
+emmeans(mesocosm_q1_lm, specs = trt.vs.ctrl~ nutrient_level*food_web)
 ```
 
 
 ### Setting up contrasts
 Now define contrasts to test (1) whether G is different from A in the H treatment, (2) whether G is different from A in the L treatment, and (3) whether G is different from A when averaging over the L and H treatments.
 
-**Questions for Kyle:**
-- Do I just filter my data frame to keep only H and L nutrient samples, run  2 new models and do the contrast that way ? 
-- For part 3, do I do the average of the food web values to remove the nutrient level variation and run a 3rd model and run the contrasts?
-- Do I filter out P from those models ? It doesn't seem like we care about P in that question. Does it change the stats? 
+**Contrast**: linear combination of variables such that all the coefficients add up to zero. (≈ set of weighted variables). In statistical tests, they define specific comparisons between variables. This might be scores, means or something else. 
 
 ```{r}
-pairs(emmeans(mesocosm_q2_lm, c("food_web", "nutrient_level")))
+## keep the order of the predictor in "specs" consistent throughout the analysis. Changes the results a LOT.
+### Q4:average without accounting for the nutrient levels = -0.5, +0.5
+### Q5: add +1 and -1 whenever needed
+### Coef sign meaning = "Grazers minus Algae"
+
+contrast(emmeans(mesocosm_q1_lm, specs = ~ nutrient_level*food_web),
+         method = list("HG-HA"= c(-1, 0, 1, 0, 0, 0), # coef only represent A and G in high nutrient. 
+                       "LG-LA"= c(0, -1, 0, 1, 0, 0), # coef only represent A and G in low nutrient
+                       "avgG-avgA"= c(-0.5, -0.5, 0.5, 0.5, 0, 0), # coef "weigh" A and G in half and consider both high and low nutrients
+                      "HLG-HLA" = c(-1,-1, 1, 1, 0, 0))) # coef consider A and G in high an low nutrient as independent scenarios
 ```
 
-```{}
-contrast(emmeans(mesocosm_q2_lm, specs = ~ food_web*nutrient_level),
-         method = list(""))
-```
+### Answer 
 
+1. In **high nutrients**, the difference in richness between A and G has a magnitude of 6.11 and is significant (p<0.05), i.e. not caused by chance.
+2. In **low nutrients**, the difference in richness between A and G has a magnitude of 6.82 and is significant (p<0.05), i.e. not caused by chance.
+3. **Averaging the richness values** in high an low nutrients, G treatment was different from A by 6.47 and the results were significant.
+4. The **interaction contrast** show that the difference in richness between A and G in high nutrients is different by 12.93 compared to A-G in low nutrients and the results are likely not due to chance (p<0.05).   
+
+**Conclusion**: The addition of grazers significantly increases the phytoplankton richness in high, low and overall nutrient concentrations. The difference in richness is greater in high nutrient environment.
+
+
+## Question 3: G vs P 
+
+### Changing contrasts and emmeans
+```{r}
+### Coef sign meaning = "Predator minus Grazers"
+## Need to change that 
+contrast(emmeans(mesocosm_q1_lm, specs = ~ nutrient_level*food_web),
+         method = list("HP-HG"= c(0, 0, -1, 0, 1, 0), 
+                       # coef only represent A and G in high nutrient
+                       "LP-LG"= c(0, 0, 0, -1, 0, 1), 
+                       # coef only represent A and G in low nutrient
+                       "avgP-avgG"= c(0, 0, -0.5, -0.5, 0.5, 0.5), 
+                       # coef "weigh" A and G in half and consider both high and low nutrients
+                     "HLP-HLG" = c(0, 0,-1, -1, 1, 1))
+                     ) # coef consider A and G in high an low nutrient as independent scenarios
+```
+### Answer
+
+1. In **high nutrients**, the difference in richness between G and P has a magnitude of 6.51 and is significant (p<0.05), i.e. not caused by chance.
+2. In **low nutrients**, the difference in richness between G and P has a magnitude of 2.03 but the result is not significant (p>0.05).
+3. **Averaging the richness values** in high an low nutrients, P treatment was different from  by 4.27 but the results were not significant (p=0.0510).
+4. The **interaction contrast** show that the difference in richness between G and P in high nutrients is different by 8.54 compared to P-G in low nutrients and the results are not significant. 
+
+**Conclusion**: In high nutrient conditions, the addition of predators decreases the phytoplankton richness significantly (estimate has a negative value). At low nutrients and by averaging the means of both nutrient conditions, the richness decreases overall as well but not significant.   
+The difference G-P has a greater magnitude at high nutrients than at low nutrients, but the difference is not significant. 
 
 
 
