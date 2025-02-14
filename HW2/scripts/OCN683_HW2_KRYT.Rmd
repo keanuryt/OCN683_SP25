@@ -52,6 +52,7 @@ Create a linear model that tests whether richness is explained by nutrient level
 
 ### Creating a linear model
 
+
 ```{r}
 mesocosm_q1_lm <- lm(phyto_chao1 ~ nutrient_level*food_web + block, data = mesocosm )
 
@@ -72,6 +73,7 @@ plot(ggeffect(mesocosm_q1_lm, terms = c("nutrient_level", "block","food_web" )))
 resid_panel(mesocosm_q1_lm, plots = c("resid", "qq", "lev", "hist"))
 ```
 
+Note: you wouldn't want to use a Poisson or Negative Binomial distribution bcs Chao index is a continuous number not a discrete count number.
 
 ### Answer
 
@@ -111,6 +113,8 @@ emmeans(mesocosm_q1_lm, specs = trt.vs.ctrl~ nutrient_level*food_web)
 ```
 
 
+
+
 ### Setting up contrasts
 Now define contrasts to test (1) whether G is different from A in the H treatment, (2) whether G is different from A in the L treatment, and (3) whether G is different from A when averaging over the L and H treatments.
 
@@ -125,8 +129,8 @@ Now define contrasts to test (1) whether G is different from A in the H treatmen
 contrast(emmeans(mesocosm_q1_lm, specs = ~ nutrient_level*food_web),
          method = list("HG-HA"= c(-1, 0, 1, 0, 0, 0), # coef only represent A and G in high nutrient. 
                        "LG-LA"= c(0, -1, 0, 1, 0, 0), # coef only represent A and G in low nutrient
-                       "avgG-avgA"= c(-0.5, -0.5, 0.5, 0.5, 0, 0), # coef "weigh" A and G in half and consider both high and low nutrients
-                      "HLG-HLA" = c(-1,-1, 1, 1, 0, 0))) # coef consider A and G in high an low nutrient as independent scenarios
+                       "avgG-avgA"= c(-1, -1, 1, 1, 0, 0), # coef "weigh" A and G in half and consider both high and low nutrients, CORRECTION: changed the coefficient values. you do'nt want 0.5
+                      "HLG-HLA" = c(-1, 1, 1, -1, 0, 0))) # coef consider A and G in high an low nutrient as independent scenarios, CORRECTION: changed the coefficient value, changed the signs 
 ```
 
 ### Answer 

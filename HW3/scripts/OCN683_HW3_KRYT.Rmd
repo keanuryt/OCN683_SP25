@@ -233,6 +233,7 @@ plot(ggeffect(top_fish_lm, terms = c("depth", "taxonname")))
 ```
 
 
+
 #### Answer
 
 A linear model might not be the best statistical tool to understand the distribution of fish species with depth.  
