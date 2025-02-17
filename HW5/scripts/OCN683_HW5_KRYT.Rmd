@@ -1,0 +1,305 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW5- Fish Survey Count
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load Libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(patchwork)
+#library(grid)
+#library(gridExtra)
+#library(ghibli)
+#library(RColorBrewer)
+#library(gt)
+#library(gtExtras)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(ggResidpanel) #residual panel
+library(GGally)
+library(arm) #discrete.histogram() function
+library(MASS) #required for arm package
+```
+
+## Load the functions
+
+```{r}
+dispersion <- function (model){
+  sum(residuals(model, type = "pearson")^2)/(length(model$y)-length(model$coefficients))
+}
+```
+
+
+
+## Load data
+The variables with are interested in are:
+- turf algae (column ‘ta’)
+- hard coral (column ‘hard_coral’) 
+- sand (column ‘sand’)
+- crustose coralline algae (column ‘cca’)
+```{r}
+fish <- read_csv(here("HW5","data","CRCP_Reef_Fish_Surveys_kole.csv"))
+```
+
+## Question 1: Predictor Correlations
+
+```{r}
+fish1 <- fish[,c("ta","hard_coral", "sand", "cca")]
+ggpairs(fish1)
+
+```
+
+
+## Question 2: Poisson distribution with single predictor model
+_For each of the four predictors, make single-predictor models where the response variable is kole counts. Consider which of the predictors could be transformed to reduce skew along the x-axis. For educational purposes, start by using a poisson distribution for the counts._
+
+### Turf Algae
+
+```{r}
+#Based on the frequency distribution of the turf algae (ta) data, the predictor does not seem to be suited for the Poisson distribution. 
+par(mfrow = c(1,2))
+discrete.histogram(fish$count)
+discrete.histogram(fish$ta)
+
+
+```
+
+```{r}
+ta_lm <- lm(count ~ ta, data = fish)
+summary(ta_lm)
+
+resid_panel(ta_lm, plots = c("resid", "qq", "lev", "hist"))
+```
+
+```{r}
+ta_glm <- glm(count ~ ta, family= poisson, data = fish)
+summary(ta_glm)
+resid_panel(ta_glm, plots = c("resid", "qq", "lev", "hist"))
+resid_xpanel(ta_glm)
+
+```
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(ta_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff
+
+plot(allEffects(ta_glm))
+
+```
+
+```{r}
+Anova(ta_glm)
+```
+
+```{r}
+discrete.histogram(fish$ta, prob.col = 'orange', xlim = c(0, 100), ylim = c(0,0.18))
+lines(0:25, dpois(0:25, lambda = mean(fish$count)), col = 'blue',
+lwd = 4, type = 'b')
+legend(12, 0.15, lwd = 4, col = 'blue', lty = 1, legend = "Poisson
+prediction")
+```
+
+
+**Overdispersion**: Poisson and Binomial distributions makes assumptions on the variability of the data which is used for the calculations of likelihood. Larger variability will result in smaller Confidence Intervals (CI) and p-values, which is inaccurate.   
+With a dispersion of 30.10 (>>>1), the data is over dispersed and it will result in smaller CI and p-values than it should. 
+```{r}
+dispersion(ta_glm)
+```
+
+
+
+### Hard Coral
+
+```{r}
+#Based on the frequency distribution of the hard coral data, the predictor seem to be suited for the Poisson distribution. 
+par(mfrow = c(1,2))
+discrete.histogram(fish$count)
+discrete.histogram(fish$hard_coral)
+
+
+```
+
+```{r}
+coral_lm <- lm(count ~ hard_coral, data = fish)
+summary(coral_lm)
+
+resid_panel(coral_lm, plots = c("resid", "qq", "lev", "hist"))
+```
+
+```{r}
+coral_glm <- glm(count ~ hard_coral, family= poisson, data = fish)
+summary(coral_glm)
+resid_panel(coral_glm, plots = c("resid", "qq", "lev", "hist"))
+resid_xpanel(coral_glm)
+
+```
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(coral_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff
+
+plot(allEffects(coral_glm))
+
+```
+
+```{r}
+Anova(coral_glm)
+```
+
+```{r}
+discrete.histogram(fish$hard_coral, prob.col = 'orange', xlim = c(0, 75))
+lines(0:25, dpois(0:25, lambda = mean(fish$count)), col = 'blue',
+lwd = 4, type = 'b')
+legend(12, 0.20, lwd = 4, col = 'blue', lty = 1, legend = "Poisson
+prediction")
+```
+
+```{r}
+dispersion(coral_glm)
+```
+With a dispersion of 28.13 (>>>1), the data is over dispersed and it will result in smaller CI and p-values than it should. 
+
+
+
+### Sand
+
+```{r}
+#Based on the frequency distribution of the hard coral data, the predictor seem to be suited for the Poisson distribution. 
+par(mfrow = c(1,2))
+discrete.histogram(fish$count)
+discrete.histogram(fish$sand)
+
+
+```
+
+```{}
+coral_lm <- lm(count ~ sand, data = fish)
+summary(coral_lm)
+
+resid_panel(coral_lm, plots = c("resid", "qq", "lev", "hist"))
+```
+
+```{r}
+sand_glm <- glm(count ~ sand, family= poisson, data = fish)
+summary(sand_glm)
+resid_panel(sand_glm, plots = c("resid", "qq", "lev", "hist"))
+resid_xpanel(sand_glm)
+
+```
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(sand_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff
+
+plot(allEffects(sand_glm))
+
+```
+
+```{r}
+Anova(sand_glm)
+```
+
+```{r}
+discrete.histogram(fish$sand, prob.col = 'orange', xlim = c(0, 75))
+lines(0:25, dpois(0:25, lambda = mean(fish$count)), col = 'blue',
+lwd = 4, type = 'b')
+legend(12, 0.20, lwd = 4, col = 'blue', lty = 1, legend = "Poisson
+prediction")
+```
+
+```{r}
+dispersion(sand_glm)
+```
+With a dispersion of 30.98 (>>>1), the data is over dispersed and it will result in smaller CI and p-values than it should. 
+
+
+### CCA
+
+```{r}
+#Based on the frequency distribution of the hard coral data, the predictor seem to be suited for the Poisson distribution. 
+par(mfrow = c(1,2))
+discrete.histogram(fish$count)
+discrete.histogram(fish$cca)
+
+
+```
+
+```{}
+cca_lm <- lm(count ~ cca, data = fish)
+summary(coral_lm)
+
+resid_panel(coral_lm, plots = c("resid", "qq", "lev", "hist"))
+```
+
+```{r}
+cca_glm <- glm(count ~ cca, family= poisson, data = fish)
+summary(cca_glm)
+resid_panel(cca_glm, plots = c("resid", "qq", "lev", "hist"))
+resid_xpanel(cca_glm)
+
+```
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(cca_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff
+
+plot(allEffects(cca_glm))
+
+```
+
+```{r}
+Anova(cca_glm)
+```
+
+```{r}
+discrete.histogram(fish$cca, prob.col = 'orange', xlim = c(0, 75))
+lines(0:25, dpois(0:25, lambda = mean(fish$count)), col = 'blue',
+lwd = 4, type = 'b')
+legend(12, 0.20, lwd = 4, col = 'blue', lty = 1, legend = "Poisson
+prediction")
+```
+
+```{r}
+dispersion(cca_glm)
+```
+With a dispersion of 30.83 (>>>1), the data is over dispersed and it will result in smaller CI and p-values than it should. 
+
+
+### Answer: Relationship between Kole and the predictors
+- There is a positive relationship between Kole and hard corals, and CCA. An increase in those predictors will result in an significant increase in Kole count.
+- There is a negative relationship between Kole and turf algae, and sand. An increase in those predictors will result in an significant decrease in Kole count
+
+## Question 3: dealing with overdispersion in a model
+To deal with **over-dispersion**, we can use a **negative binomial** distribution or use **random effects**. 
+
+```{r}
+
+```
+
+
+## Question: including all substrate types in a single model 
+
+
