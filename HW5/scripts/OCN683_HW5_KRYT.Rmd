@@ -97,10 +97,10 @@ resid_xpanel(ta_glm)
 
 ```{r}
 # lecture notes suggest using plot(log.y = TRUE) but I get an error. 
-ggeff <- ggeffect(ta_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff <- ggeffect(ta_glm) %>% plot(log_y = TRUE)
 ggeff
 
-plot(allEffects(ta_glm))
+
 
 ```
 
@@ -153,11 +153,8 @@ resid_xpanel(coral_glm)
 
 
 ```{r}
-# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
-ggeff <- ggeffect(coral_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff <- ggeffect(coral_glm) %>% plot(log_y = TRUE)
 ggeff
-
-plot(allEffects(coral_glm))
 
 ```
 
@@ -191,12 +188,7 @@ discrete.histogram(fish$sand)
 
 ```
 
-```{}
-coral_lm <- lm(count ~ sand, data = fish)
-summary(coral_lm)
 
-resid_panel(coral_lm, plots = c("resid", "qq", "lev", "hist"))
-```
 
 ```{r}
 sand_glm <- glm(count ~ sand, family= poisson, data = fish)
@@ -209,10 +201,8 @@ resid_xpanel(sand_glm)
 
 ```{r}
 # lecture notes suggest using plot(log.y = TRUE) but I get an error. 
-ggeff <- ggeffect(sand_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff <- ggeffect(sand_glm) %>% plot(log_y = TRUE)
 ggeff
-
-plot(allEffects(sand_glm))
 
 ```
 
@@ -245,12 +235,6 @@ discrete.histogram(fish$cca)
 
 ```
 
-```{}
-cca_lm <- lm(count ~ cca, data = fish)
-summary(coral_lm)
-
-resid_panel(coral_lm, plots = c("resid", "qq", "lev", "hist"))
-```
 
 ```{r}
 cca_glm <- glm(count ~ cca, family= poisson, data = fish)
@@ -262,12 +246,8 @@ resid_xpanel(cca_glm)
 
 
 ```{r}
-# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
-ggeff <- ggeffect(cca_glm) %>% plot()+ scale_y_continuous(trans = "log")
+ggeff <- ggeffect(cca_glm) %>% plot(log_y = TRUE)
 ggeff
-
-plot(allEffects(cca_glm))
-
 ```
 
 ```{r}
@@ -295,11 +275,164 @@ With a dispersion of 30.83 (>>>1), the data is over dispersed and it will result
 ## Question 3: dealing with overdispersion in a model
 To deal with **over-dispersion**, we can use a **negative binomial** distribution or use **random effects**. 
 
+### Turf Algae
+
 ```{r}
+#negative binomial distribution 
+ta_nb <- glm.nb(count ~ ta, data = fish)
+summary(ta_nb)
+
 
 ```
 
 
-## Question: including all substrate types in a single model 
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(ta_nb) %>% plot(log_y=TRUE)
+ggeff
+
+```
+
+```{r}
+Anova(ta_nb)
+```
+
+**Overdispersion**: 
+With a dispersion of 0.98, the overdispersion is fixed. 
+```{r}
+dispersion(ta_nb)
+```
+
+### Hard Corals
+
+```{r}
+#negative binomial distribution 
+hc_nb <- glm.nb(count ~ hard_coral, data = fish)
+summary(hc_nb)
+
+
+```
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(hc_nb) %>% plot(log_y=TRUE)
+ggeff
+
+```
+
+```{r}
+Anova(hc_nb)
+```
+
+**Overdispersion**: 
+With a dispersion of 1.08, the overdispersion is fixed. 
+```{r}
+dispersion(hc_nb)
+```
+
+### Sand
+```{r}
+#negative binomial distribution 
+sand_nb <- glm.nb(count ~ sand, data = fish)
+summary(sand_nb)
+
+
+```
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(sand_nb) %>% plot(log_y=TRUE)
+ggeff
+
+```
+
+```{r}
+Anova(sand_nb)
+```
+
+**Overdispersion**: 
+With a dispersion of 0.95, the overdispersion is fixed. 
+```{r}
+dispersion(sand_nb)
+```
+
+### CCA 
+```{r}
+#negative binomial distribution 
+cca_nb <- glm.nb(count ~ cca, data = fish)
+summary(cca_nb)
+
+
+```
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(cca_nb) %>% plot(log_y=TRUE)
+ggeff
+
+```
+
+```{r}
+Anova(cca_nb)
+```
+
+**Overdispersion**: 
+With a dispersion of 0.99, the overdispersion is fixed. 
+```{r}
+dispersion(ta_nb)
+```
+
+### Answer
+The dispersion values became closer to one using the negative binomial. This is because in this model, the variance is proportional to the mean and data points become corrected by a factor of "Phi".
+
+## Question 4: Including all substrate types in a single model 
+
+For this model, I tried a regular glm() with Poisson distribution and the dispersion was about 27. I decided to do negative binomial model to minimize the dispersion. 
+```{r}
+full_glm <- glm.nb(count ~ ta + hard_coral + sand + cca, data = fish)
+summary(full_glm)
+```
+
+
+
+```{r}
+# lecture notes suggest using plot(log.y = TRUE) but I get an error. 
+ggeff <- ggeffect(full_glm) %>% plot(log_y=TRUE)
+
+ggeff
+
+```
+
+
+```{r}
+Anova(full_glm)
+```
+
+
+**Overdispersion**: 
+With a dispersion of 0.99, the overdispersion is fixed. 
+```{r}
+full_glm <- glm.nb(count ~ ta + hard_coral + sand + cca, data = fish)
+dispersion(full_glm)
+```
+### Diagnostic plots
+
+The resid_panel function did not work with the glm.nb(). 
+
+
+### Answer
+
+- **Turf Algae**: The effects shifted from a negative slope to a positive slope. The Chi Square value is 1000x greater in the new model.
+- **Hard Corals**: The effect slope remains positive but the magnitude of the effect is much greater in the new model. The Chi Square value is 100,000x greater in the new model.
+- **Sand**: The effect slope shifted from a negative slope to a positive slope and the magnitude is greater in the new model. The Chi Square value is 10,000x greater in the new model.
+- **CCA**: The effect slope remains positive but the magnitude of the effect is much greater in the new model. The Chi Square value is 100x greater in the new model.
+- **Explanation to changes**: The model is now accounting for the all 4 benthic cover types and is able to consider the effects of each of the variable on one another instead of consider an individual effect. 
+
+
+### Closing thoughts
+Overall, it looks like corals and CCA are more associated with higher counts of Kole. We can possibly perform a linear regression and calculate the R-squared and p-values to estimate the significance of the correlation. 
+
 
 
