@@ -1,0 +1,151 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 6 - Avian Pox
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(gt)
+library(gtExtras)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+
+```
+## Load the functions
+
+```{r}
+dispersion <- function (model){
+  sum(residuals(model, type = "pearson")^2)/(length(model$y)-length(model$coefficients))
+}
+```
+
+## Load data
+```{r}
+avian <- read_csv(here("HW6","data","avian_pox.csv"))
+```
+
+## Data Clean-Up
+```{r}
+avian<- avian %>% clean_names() %>% 
+  mutate(elev = factor(elev, levels = c("low", "mid", "high")))
+avian
+```
+
+
+## Question 1
+_The twelve sites have been coded as low/medium/high elevation._  
+_First, summarize the number of observations of each bird species at each elevation. This will be important context for what we can and cannot ask about avian pox patterns._   
+_Also, what is the prevalence of chronic malaria in the bird species at the difference elevations? Note that some birds do not have a known malaria status (code = 2). Only use birds with code = 0 or 1 to quantify the prevalence of malaria._
+
+
+```{r}
+# Summarize the number of observations of bird species by elevation
+avian %>% group_by(species,elev) %>% 
+  summarise(obs = n()) %>% ungroup() %>% 
+  gt(rowname_col = "species") %>% 
+  tab_header(title = "Count of Birds Species by Elevation") %>% 
+  cols_label(species = "Species",
+             elev = "Elevation",
+             obs = "Count")
+```
+
+```{r}
+# Calculate the prevalence of malaria by species, by elevations
+avian %>% filter(malaria !=2) %>% group_by(species,elev) %>% 
+  summarise(count_malaria = length(malaria[malaria == 1]),
+            count_tot = n(),
+            prevalence = round(count_malaria/count_tot, 3)) %>% 
+  ungroup() %>% 
+  gt(rowname_col = "species") %>% 
+  tab_header(title = "Prevalence of Malaria by Birds Species by Elevation") %>% 
+  cols_label(species = "Species",
+             elev = "Elevation",
+             count_malaria = "# Chronic Malaria",
+             count_tot = "Total Population",
+             prevalence = "Prevalence")
+```
+
+
+## Question 2
+_Create a model that tests whether pox prevalence depends on elevation, and whether it differs between species, and whether species differences depend on elevation. Evaluate the model results using the general methods we use in this course. Provide a verbal explanation of what the model tells us._
+
+```{r}
+avian_glm <- glm(activepox ~ species*elev, data = avian, family = binomial)
+summary(avian_glm)
+```
+
+```{r}
+Anova(avian_glm)
+```
+
+```{r}
+# looking at the dispersion of the data based on the previous hw
+dispersion(avian_glm)
+```
+
+
+
+### Answer Q2
+- **Species**: There are significant differences in the number of active pox between bird species, particularly APAP and JAWE. 
+- **Elevation**: Numbers of Pox are significantly different between low and high elevations
+- **Interaction**: Elevation plays a role in determining the number of pox cases in certain species such as HAAM and, to a lesser extent, JAWE.
+- **Likelihood**: Chi Squared Test shows that pox count differences between species are significant, differences in pox number between elevations are significant, and elevation plays a role in the differences of pox numbers observed between species. 
+- **NA in summary**: NA value in the coefficient may be because there is no data available at low elevation for IIWI.
+
+
+
+## Question 3
+_Create a subset of the data that only includes birds with known malaria status (0 or 1). Also, you’ll probably want to exclude ʻIʻiwi (look at your answer to #1 to see why). Create a model that tests whether malaria status and elevation affect pox prevalence (and whether those effects differ between species). Evaluate the model results using the general methods we use in this course. Provide a verbal explanation of what the model tells us._
+
+
+```{r}
+# subset the data
+avian_q3 <- avian %>% filter(malaria != 2, species != "IIWI") 
+avian_q3 %>% select(species) %>%  distinct()
+```
+
+```{r}
+# create the new glm including the malaria status
+pox_malaria_glm <- glm(activepox ~ species*elev + malaria, data = avian_q3, family = binomial)
+```
+
+```{r}
+summary(pox_malaria_glm)
+```
+
+```{r}
+Anova(pox_malaria_glm)
+```
+
+```{r}
+plot(allEffects(pox_malaria_glm))
+```
+
+
+### Answer Q3
+- **Species**: Only APAP and HAAM remain in the species list after sub-setting the data set. There are differences in the number of active pox between bird species, but it is only mildly significant.
+- **Elevation**: Numbers of pox are still significantly different between low and high elevations but less so than in the previous model.
+- **Interaction**: Elevation plays a significant role in determining the number of pox cases in HAAM, specifically, compared to APAP.
+- **Malaria status**: Malaria status significantly affects the active pox status of a bird. 
+- **Likelihood**: Chi Squared Test shows that difference in pox count between species is significant, difference in pox number between elevations is significant, and elevation plays a role in the differences of pox numbers observed between species. Malaria status also significantly impacts pox status. 
+- **Effects Plot**: There is a clear correlation between malaria status and pox status. Being positive to malaria increases the probability to also have pox in a bird. 
+
+
+
+
