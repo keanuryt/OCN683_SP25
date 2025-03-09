@@ -54,6 +54,19 @@ copepods %>%  filter(nx > 0) %>%
          variance_binom = proba_survival*(1-proba_survival)) # calculate the variance based on the Bernoulli distribution 
 
 ```
+### Q1 Corrected
+
+```{r}
+copepods %>%  # don't filter the data set to remove the 0. Keep the 0
+  summarise(alive = sum(nx), # count the total number of live copepods
+            mean = mean(nx), # calculating the mean
+            variance = var(nx)) %>% # variance in non-bernoulli conditions
+  mutate(dead = (91*25)-alive, # calculate the n of dead ones based on initial number
+         proba_survival = alive/(91*25), # survival probability = live/total intial
+         variance_binom = 25*proba_survival*(1-proba_survival)) # calculate the variance based on the Bernoulli distribution 
+# N=5 and binomial variance in N*p*(1-p)
+```
+
 
 ## Question 3
 
@@ -188,7 +201,7 @@ From the trials below, we can see that theta = 1.5 results in a graph that is th
 ```{r, fig.height= 8, fig.width= 6}
 par(mfrow = c(3,2))
 discrete.histogram(rnegbin(n=1373, mu = 5.026948, theta= 0.1), 
-                   main = "Theta = 0.5")
+                   main = "Theta = 0.1")
 discrete.histogram(rnegbin(n=1373, mu = 5.026948, theta= 0.5), 
                    main = "Theta = 0.5")
 discrete.histogram(rnegbin(n=1373, mu = 5.026948, theta= 1), 

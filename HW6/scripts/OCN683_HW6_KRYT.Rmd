@@ -70,7 +70,8 @@ avian %>% group_by(species,elev) %>%
 avian %>% filter(malaria !=2) %>% group_by(species,elev) %>% 
   summarise(count_malaria = length(malaria[malaria == 1]),
             count_tot = n(),
-            prevalence = round(count_malaria/count_tot, 3)) %>% 
+            prevalence = round(count_malaria/count_tot, 3),
+            pox = mean(activepox)) %>% # forgot to do the pox prevalence
   ungroup() %>% 
   gt(rowname_col = "species") %>% 
   tab_header(title = "Prevalence of Malaria by Birds Species by Elevation") %>% 
@@ -80,6 +81,7 @@ avian %>% filter(malaria !=2) %>% group_by(species,elev) %>%
              count_tot = "Total Population",
              prevalence = "Prevalence")
 ```
+
 
 
 ## Question 2
@@ -106,7 +108,7 @@ dispersion(avian_glm)
 - **Elevation**: Numbers of Pox are significantly different between low and high elevations
 - **Interaction**: Elevation plays a role in determining the number of pox cases in certain species such as HAAM and, to a lesser extent, JAWE.
 - **Likelihood**: Chi Squared Test shows that pox count differences between species are significant, differences in pox number between elevations are significant, and elevation plays a role in the differences of pox numbers observed between species. 
-- **NA in summary**: NA value in the coefficient may be because there is no data available at low elevation for IIWI.
+- **NA in summary**: NA value in the coefficient may be because there is no data available at low elevation for IIWI. Lack data for the IIWI, unbalanced data
 
 
 
@@ -120,9 +122,14 @@ avian_q3 <- avian %>% filter(malaria != 2, species != "IIWI")
 avian_q3 %>% select(species) %>%  distinct()
 ```
 
-```{r}
+```{}
 # create the new glm including the malaria status
 pox_malaria_glm <- glm(activepox ~ species*elev + malaria, data = avian_q3, family = binomial)
+```
+
+```{r}
+# CORRECTED MODEL
+pox_malaria_glm <- glm(activepox ~ species*elev + malaria*species, data = avian_q3, family = binomial)
 ```
 
 ```{r}
@@ -135,6 +142,7 @@ Anova(pox_malaria_glm)
 
 ```{r}
 plot(allEffects(pox_malaria_glm))
+# scale of the y-axis is logit scale because we deal with binomial fucntion 
 ```
 
 

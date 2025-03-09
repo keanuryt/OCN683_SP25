@@ -61,7 +61,7 @@ fish <- read_csv(here("HW5","data","CRCP_Reef_Fish_Surveys_kole.csv"))
 ```{r}
 fish1 <- fish[,c("ta","hard_coral", "sand", "cca")]
 ggpairs(fish1)
-
+#ggpairs(fish, columns = c("ta","hard_coral", "sand", "cca"))
 ```
 
 
@@ -421,6 +421,9 @@ dispersion(full_glm)
 
 The resid_panel function did not work with the glm.nb(). 
 
+```{r}
+plot(allEffects(full_glm))
+```
 
 ### Answer
 
@@ -435,4 +438,26 @@ The resid_panel function did not work with the glm.nb().
 Overall, it looks like corals and CCA are more associated with higher counts of Kole. We can possibly perform a linear regression and calculate the R-squared and p-values to estimate the significance of the correlation. 
 
 
+# Note
+Kyle sqrt transformed the CCA , hard corals and sand?
+
+```{r}
+par(mfrow = c(2,2))
+plot(full_glm, which = 1)
+plot(full_glm, which = 2)
+plot(full_glm, which = 5)
+plot(full_glm, which = 3)
+```
+
+```{r}
+library(DHARMa)
+# for residual testing/ residual diagnostic. Check it out
+```
+
+```{r}
+pca_data <- fish[, c("sand", "cca", "hard_coral", "ta")]
+pca <-princomp(pca_data, cor = T)
+biplot(pca)
+summary(pca)
+```
 

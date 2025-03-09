@@ -1,0 +1,284 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 7 - Temperature effect on predators
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(gt)
+library(gtExtras)
+
+# Data analysis/statistics 
+library(glmmTMB)
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+#library(arm) #discrete.histogram() function
+#library(MASS) #required for arm package
+```
+
+
+## Load the data
+
+```{r}
+bug <- read_csv(here("HW7","data","collembola_2025.csv"))
+```
+
+
+
+### Data clean-up 
+
+```{r}
+bug<- bug %>% clean_names() %>% 
+  mutate(predators = factor(predators, levels = c("none", "HA", "HM", "HA+HM")))
+
+```
+
+## Question 1
+
+1. _First use an appropriate ‘standard’ model for counts (i.e., not zero-inflated) to ask whether the abundance of Collembola is affected by temperature, by the presence of one or more predators, and whether the effect of predators depends on temperature. Use the function glmmTMB() to fit the model, because later we will compare this model to others fit with this function. Plot fitted effects and perform likelihood ratio tests on the relevant terms._
+
+2. _To perform marginal tests you will want to compare pairs of models using the function anova(). Previously we used the function Anova() (the capitalized and uncapitalized functions are different) to automate this process, but this function returns a less accurate test for glmmTMB (a Wald test). So, for each term you want to test, compare a model with this term to a model without this term. How do you interpret the results at this stage?_
+
+```{r}
+# setting up the full model and the reduced model, missing the interaction term
+Q1_full <- glmmTMB(total_prey~predators*temp_factor, data = bug)
+```
+
+```{r}
+#Visualizing the effects plots of full and reduced models.
+plot(allEffects(Q1_full))
+```
+
+### Likehood ratio
+
+```{r}
+Q1_reduced <- glmmTMB(total_prey~predators + temp_factor, data = bug)
+```
+
+```{r}
+# comparing the models with the anova() function
+## p = 0.3, the interaction is not significant 
+anova(Q1_full,Q1_reduced)
+```
+
+### Testing the parameters individually
+#### Predators
+```{r}
+Q1_predators <- glmmTMB(total_prey~predators, data = bug)
+```
+
+```{r}
+## p = 0.26
+anova(Q1_reduced, Q1_predators)
+```
+
+#### Temperature (factors)
+```{r}
+Q1_temp <- glmmTMB(total_prey~temp_factor, data = bug)
+```
+
+```{r}
+## p = 0.03 (p < 0.05)
+anova(Q1_reduced, Q1_temp)
+```
+### Answer Q1
+
+- Comparing the full vs the reduced model:
+The interaction between the predators and the temperature was not significant. That means that the effect of the predator on the Collembola is not dependent on temperature. 
+
+- Comparing the predator alone:
+The likehood ratio between the reduced model and model only accounting for the predators was not significant, which means that the predator communities did not have a significant effect on the total number of Collembola in the mesocosm.
+
+- Comparing the temperature effect:
+The likehood ratio between the reduced model and model only accounting for the temperature was significant, which means that the temperature regimes had a significant effect on the total number of Collembola in the mesocosm.
+
+## Question 2
+
+_A large proportion of the data are zeros, and it may be the case that processes controlling abundance are different from processes controlling ‘extra’ zeros – if, in fact, there are extra zeros. _
+
+a. _Use glmmTMB to fit zero-inflated count model(s). You should decide how many to fit, and which kind of probability distribution(s) to use. _
+b. _Use AIC to do model selection, to determine whether incorporating zero inflation improves model fit._
+c. _Using the best model (i.e., the lowest AIC), perform marginal likelihood ratio tests on the predictors, again using anova() to compare pairs of models. How have the results changed from #1?_
+
+
+```{r}
+zi_full <- glmmTMB(total_prey~predators*temp_factor, ziformula =~ 1, # zero inflated formula
+                 data = bug)
+zi_nb <- glmmTMB(total_prey~predators*temp_factor, ziformula =~ 1, # zero inflated formula
+                 data = bug, family = 'nbinom2')
+zi_poisson <- glmmTMB(total_prey~predators, ziformula =~ 1, # zero inflated formula
+        data = bug, family = 'poisson')
+
+```
+
+```{r}
+## It looks like the zero inflated model without specifying a family of function has the smallest AIC number
+anova(Q1_full, zi_full, zi_nb, zi_poisson)
+```
+
+```{r}
+plot(allEffects(zi_full))
+```
+
+
+### Testing the interaction
+```{r}
+zi_reduced <- glmmTMB(total_prey~predators+temp_factor, ziformula =~ 1, data = bug)
+```
+
+```{r}
+# p < 0.05
+anova(zi_full, zi_reduced)
+```
+
+### Testing individual variable
+#### Predators
+```{r}
+zi_pred <- glmmTMB(total_prey~predators, ziformula =~ 1, data = bug)
+```
+
+```{r}
+# p < 0.05
+anova(zi_reduced, zi_pred)
+```
+
+#### Temperature
+```{r}
+zi_temp <- glmmTMB(total_prey~temp_factor, ziformula =~ 1, data = bug)
+```
+
+```{r}
+# p < 0.05
+anova(zi_reduced, zi_temp)
+```
+
+### Answer Q2
+
+- Interaction: The interaction is significant. The magnitude of the predator effect on the Collembole is temperature dependent, which was not detected in Q1 when zero inflation was not accounted for.
+- Predator: The predator effect is significant. So, the presence of predator changes the number of Collembole in a mesocosm when accounting for zero inflation. 
+- Temperature: Temperature affects significantly the population of preys. However, the magnitude of the effect is more significant than in Q1 when zero inflation was not accounted for. 
+
+
+## Question 3
+### Renaming the columns
+```{r}
+bug <- bug %>% mutate(pred_cat = ifelse(predators == "none", "No Predators", "Predators")) %>% 
+  relocate(pred_cat, .after = "predators")
+```
+
+```{r}
+Q3_zi_full <- glmmTMB(total_prey~pred_cat*temp_factor, ziformula =~ 1, data = bug)
+```
+
+```{r}
+plot(allEffects(Q3_zi_full))
+```
+
+### Reduced model
+```{r}
+Q3_zi_reduced <- glmmTMB(total_prey~pred_cat + temp_factor, ziformula =~ 1, data = bug)
+```
+
+```{r}
+#p < 0.05
+anova(Q3_zi_full, Q3_zi_reduced)
+```
+
+
+### Testing individual variable
+#### Predators 
+```{r}
+Q3_zi_pred <- glmmTMB(total_prey~pred_cat, ziformula =~ 1, data = bug)
+```
+
+```{r}
+# p < 0.05
+anova(Q3_zi_full, Q3_zi_pred)
+```
+
+#### Temperature 
+```{r}
+Q3_zi_temp <- glmmTMB(total_prey~temp_factor, ziformula =~ 1, data = bug)
+```
+
+```{r}
+# p < 0.05
+anova(Q3_zi_full, Q3_zi_temp)
+```
+
+### Answer Q3
+
+- Interaction: The result is similar to Q2. The effect of predator is dependent on temperature and the effect of the interaction is significant. 
+- Predator: The predator effect is significant. The presence of predator changes the number of Collembole in a mesocosm. However, as we saw previously, the community composition of predators does not have a significant effect on the preys, but the presence of predators as a whole affects the prey population.
+- Temperature:the effect is comparable to Q2. Significant effect of temperature on the prey count. 
+
+
+## Question 4
+```{r}
+Q4_full <- glmmTMB(total_prey ~ temp_factor * predators, 
+                       ziformula = ~ 1, 
+                       data = bug) 
+
+Q4_reduced <- glmmTMB(total_prey ~ temp_factor * predators, 
+                       ziformula = ~ temp_factor+predators, # let zeros vary with temp and predators
+                       data = bug) 
+
+Q4_pred <- glmmTMB(total_prey ~ temp_factor * predators, 
+                       ziformula = ~ predators, # let zeros very with predators only
+                       data = bug) 
+
+Q4_temp <- glmmTMB(total_prey ~ temp_factor * predators, 
+                       ziformula = ~ temp_factor,  # let zeros very with temperature only
+                       data = bug) 
+```
+
+### Testing the interaction
+```{r}
+# p< 0.05
+anova(Q4_full, Q4_reduced)
+```
+### Testing individual variables
+#### Predators
+```{r}
+# p< 0.05
+anova(Q4_reduced, Q4_pred)
+```
+#### Temperature
+```{r}
+# p = 0.031
+anova(Q4_reduced, Q4_temp)
+```
+
+### Best fit model
+The best model is Q4_pred where zero values are allowed to vary based on predator categories.
+```{r}
+summary(Q4_pred)
+```
+
+```{r}
+summary(zi_full)
+```
+
+
+### Answer Q4 
+
+- Zeros are more likely to be inflated with predators HA and HM because their coefficient are positive
+- Zeros are less likely to be inflated with predators HA+HM because that combination of predators has a coefficient less than zero. 
+- I'm not sure what the count model is... Sorry. 
+
+
+
