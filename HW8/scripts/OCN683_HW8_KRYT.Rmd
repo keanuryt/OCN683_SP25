@@ -1,0 +1,219 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 8 - Simulations
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+#library(janitor)
+library(gt)
+library(gtExtras)
+
+# Data analysis/statistics 
+#library(glmmTMB)
+library(car) #ANOVA
+library(MASS)
+#library(ggeffects)
+#library(effects) #dependency for ggeffects
+```
+
+## Question 1 
+
+```{r}
+set.seed(123)  # For reproducibility
+
+# Initial conditions
+trmt_avg <- 460
+control_avg <- 415
+sd_exp <- 110
+nsims <- 1000
+
+```
+
+_1. Start by assuming three replicates each of the treatment and control plots._ 
+_2. Perform 1000 simulations, where each time you draw three treatment ANPP values and three control ANPP values, using the appropriate means and standard deviation, from a normal distribution._
+
+_3. For each random draw, fit a linear model testing for a treatment effect. Save the p-value from an F-test for the treatment effect (you can extract this with Anova(model)$P[1])._
+_4. Also save the model coefficient that quantifies the difference between the treatment and control groups. At the end you should have 1000 p-values and 1000 coefficient values._
+_5. What proportion of the p-values are less than 0.05? This is your statistical power, under this design, effect size, and residual noise._
+_6. Now repeat this whole process using different numbers of replicates: 5, 10, 20, 50, 100._
+_7. Plot the statistical power vs. the number of replicates._
+_8. How much replication do you need to achieve a power of 0.25? This means that when there is a real treatment effect, you will detect it (only) 25% of the time._
+
+```{r}
+p_values <- numeric(nsims)  # Store p-values
+coefficients <- numeric(nsims)  # Store treatment effect estimates
+```
+
+```{r}
+# create a function that can do the simluations for us
+set.seed(123)  # For reproducibility
+
+experiment <- function(trmt_avg = 460, control_avg = 415, sd_exp = 110,
+                       nsims = 1000, replicates) { 
+  
+  treatment <- factor(rep(c("Control", "Treatment"), each = replicates))
+  
+  for (i in 1:nsims) {
+  #random values for the treatments
+    treatment_values <- rnorm(replicates, mean = trmt_avg, sd = sd_exp)
+  #random values for the controls
+    control_values <- rnorm(replicates, mean = control_avg, sd = sd_exp)
+    
+    exp_df <- tibble(
+      ANPP = c(treatment_values, control_values),
+      treatment = treatment
+    )
+    
+    model <- lm(ANPP ~ treatment, data = exp_df)
+
+    p_values[i] <<- Anova(model)$P[1]
+
+    coefficients[i] <<- summary(model)$coefficients[2]
+  }
+}
+
+```
+
+```{r}
+# for 3 replicates
+experiment(replicates =3)
+head(p_values)
+head(coefficients)
+
+stat_power_3 <- mean(p_values < 0.05)
+stat_power_3
+```
+
+
+```{r}
+# for 5 replicates
+experiment(rep = 5)
+head(p_values)
+stat_power_5 <- mean(p_values < 0.05)
+```
+
+```{r}
+# for 10 replicates
+experiment(rep = 10)
+head(p_values)
+stat_power_10 <- mean(p_values < 0.05)
+```
+
+```{r}
+# for 20 replicates
+experiment(rep = 20)
+stat_power_20 <- mean(p_values < 0.05)
+```
+```{r}
+# for 25 replicates
+experiment(rep = 25)
+stat_power_25 <- mean(p_values < 0.05)
+```
+
+```{r}
+# for 50 replicates
+experiment(rep = 50)
+stat_power_50 <- mean(p_values < 0.05)
+```
+
+```{r}
+# for 100 replicates
+experiment(rep = 100)
+stat_power_100 <- mean(p_values < 0.05)
+```
+
+```{r}
+# save the p_values and the stat power in a dataframe
+stat_pow_df <- tibble(
+  rep = c(3, 5, 10, 20, 25, 50, 100),
+  stat_pow = c(stat_power_3,stat_power_5,stat_power_10,
+               stat_power_20, stat_power_25, stat_power_50,stat_power_100)
+)
+stat_pow_df
+```
+```{r}
+# plotting the replicates and the stat power.
+ggplot(stat_pow_df, aes(x = rep, y = stat_pow)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "Statistical Power vs. Number of Replicates",
+    x = "Number of Replicates",
+    y = "Statistical Power") +
+  scale_x_continuous(breaks = seq(from = 0, to = 100, by = 10))+
+  scale_y_continuous(breaks = seq(from = 0, to = 1, by = 0.25))+
+  theme_bw()
+
+```
+
+### Answer Q1
+
+You need at least 21 replicates to get 25% statistical power. 
+
+
+## Question 2
+
+```{r}
+#create empty tibble to save future mean coefficients
+coef_df <- tibble(
+  rep = numeric(),
+  coef = numeric()
+)
+
+# list of the replicates 
+replicates <- c(3, 5, 10, 20, 25, 50, 100)
+```
+
+```{r}
+## Somehow my coefficients have negative values. I'm not sure if that's correct. However, due to later questions, I use the absolute value of the coefficients for my answers in the hw. 
+
+# for loop to automate the calculation of the coefficients so I dont have to do it by hand like in Q1
+
+for (i in 1:length(replicates)){
+  rep <- replicates[i]
+  experiment(rep = rep) # run the function that does the simulations
+  coef <- mean(coefficients[p_values<0.05])
+  
+  tib <- tibble(rep=rep, coef=coef)
+  coef_df <- bind_rows(coef_df, tib)
+}
+
+# print coef data frame
+coef_df
+
+```
+
+
+```{r}
+#calcultating the magnitude difference of the generated mean coefficients.
+
+coef_df %>% 
+  mutate(magnitude_difference = coef+46)
+```
+
+
+### Answer Q2
+
+_How does the mean of the significant coefficients change as the number of replicates increases? Recall that because this is a simulation, we know the true value of the treatment difference: it’s 461 - 415 = 46._
+_How much larger is the simulated value from the significant experiments, compared to the true value? This is the type M error._
+_What are the potential implications for our understanding of climate change, if most warming experiments have low power?_
+
+
+- The mean of the significant coefficients gets closer to 0 as the number of replicates increases.
+- If climate models have low power, then that would mean that the models produce inflated values in their results. Warming temperatures may be lower than expected my the models
+
+
+
