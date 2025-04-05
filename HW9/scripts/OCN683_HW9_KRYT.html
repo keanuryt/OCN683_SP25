@@ -377,14 +377,18 @@ Model</a></li>
 <li><a href="#interpretation-1" id="toc-interpretation-1">Interpretation</a></li>
 </ul></li>
 <li><a href="#question-3-maximum-size-of-the-dinosaur" id="toc-question-3-maximum-size-of-the-dinosaur">Question 3: Maximum
-size of the dinosaur</a></li>
-<li><a href="#cross-validation-of-models-leave-one-out-method" id="toc-cross-validation-of-models-leave-one-out-method">Cross
-validation of models: Leave one out method</a>
+size of the dinosaur</a>
+<ul>
+<li><a href="#interpretation-2" id="toc-interpretation-2">Interpretation</a></li>
+</ul></li>
+<li><a href="#question-4-cross-validation-of-models-leave-one-out-method" id="toc-question-4-cross-validation-of-models-leave-one-out-method">Question
+4: Cross validation of models (Leave one out method)</a>
 <ul>
 <li><a href="#linear-model" id="toc-linear-model">Linear model</a></li>
 <li><a href="#exponential-model-1" id="toc-exponential-model-1">Exponential model</a></li>
 <li><a href="#logistic-model" id="toc-logistic-model">Logistic
 model</a></li>
+<li><a href="#interpretation-3" id="toc-interpretation-3">Interpretation</a></li>
 </ul></li>
 </ul>
 </div>
@@ -569,9 +573,46 @@ around that estimate? How does the estimated maximum size compare to the
 largest size in the data? How much stock do you put in the Mmax
 estimate, given the data we have? If this estimate of Mmax is true,
 about how big does this dinosaur get, relative to a human?</em></p>
+<pre class="r"><code>summary(logist)</code></pre>
+<pre><code>## 
+## Formula: mass ~ mmax/(1 + exp(-r * (age - age0)))
+## 
+## Parameters:
+##      Estimate Std. Error t value Pr(&gt;|t|)    
+## r     0.51254    0.02854   17.96   &lt;2e-16 ***
+## age0  9.12512    0.35587   25.64   &lt;2e-16 ***
+## mmax 42.99210    3.67701   11.69   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 1.04 on 77 degrees of freedom
+## 
+## Number of iterations to convergence: 14 
+## Achieved convergence tolerance: 6.202e-06</code></pre>
+<pre class="r"><code>confint(logist)</code></pre>
+<pre><code>##            2.5%      97.5%
+## r     0.4639475  0.5668192
+## age0  8.5454205  9.8756227
+## mmax 37.2608577 51.4490025</code></pre>
+<div id="interpretation-2" class="section level3">
+<h3>Interpretation</h3>
+<ul>
+<li>Only the logistic curve can give us a maximum size for the dinosaur.
+The exponential curve and the linear curve will increase to
+infinity.</li>
+<li>Based on the model coefficient, the maximum size is a mass of 43
+(kg?).</li>
+<li>The confidence interval around max mass is [37.3, 51.45]</li>
+</ul>
 </div>
-<div id="cross-validation-of-models-leave-one-out-method" class="section level2">
-<h2>Cross validation of models: Leave one out method</h2>
+</div>
+<div id="question-4-cross-validation-of-models-leave-one-out-method" class="section level2">
+<h2>Question 4: Cross validation of models (Leave one out method)</h2>
+<p><em>Now compare the three models using leave-one-out
+cross-validation. Which model is the best at predicting the data, in
+terms of LOOCV? What is the typical difference between the predicted
+values and the observed values for the best model? Does cross-validation
+yield the same ranking of models as AICc?</em></p>
 <div id="linear-model" class="section level3">
 <h3>Linear model</h3>
 <pre class="r"><code>diff_data = vector()
@@ -608,9 +649,20 @@ for( i in 1: nrow(dino)){
               start = list(r = 0.8, age0 = 2, mmax = 29.6727)) 
   diff_data[i] = dino$mass[i] - predict(logist, data.frame(age = dino$age[i]))
 }
-cross_val2 &lt;- sqrt(mean(diff_data^2))
-cross_val2</code></pre>
+cross_val3 &lt;- sqrt(mean(diff_data^2))
+mean(diff_data)</code></pre>
+<pre><code>## [1] -0.1525847</code></pre>
+<pre class="r"><code>cross_val3</code></pre>
 <pre><code>## [1] 1.019993</code></pre>
+</div>
+<div id="interpretation-3" class="section level3">
+<h3>Interpretation</h3>
+<ul>
+<li>the best model has the smallest value which is the logistic
+model.</li>
+<li>the mean value of the difference between the values is -0.153.</li>
+<li>the ranking of cross validation is the same as the AICc.</li>
+</ul>
 </div>
 </div>
 
