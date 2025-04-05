@@ -1,0 +1,197 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW9 - Non-linear Least Squares
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(gt)
+library(gtExtras)
+
+# Data analysis/statistics 
+#library(glmmTMB)
+library(car) #ANOVA
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(MuMIn)
+#library(arm) #discrete.histogram() function
+#library(MASS) #required for arm package
+```
+
+
+## Load data 
+```{r}
+dino <- read_csv(here("HW9", "data", "dinosaur.csv"))
+dino <- clean_names(dino)
+summary(dino)
+```
+
+## Question 1: Create the models and plotting curves
+
+```{r}
+age_seq <- seq(min(dino$age), max(dino$age), length.out = 80)
+```
+
+```{r}
+plot(mass~age, data = dino)
+
+lin <- nls(mass~a*age, data=dino, start = list(a=0.01)) # a = 1 and b=1
+values_lin <- predict(lin, newdata = data.frame(age = age_seq))
+lines(age_seq, values_lin, col= "blue", lwd = 3)
+
+expL<- nls(mass~a*exp(r*age), data=dino, start = list(a=0.01, r= 1)) # a=1
+values_expL <- predict(expL, newdata = data.frame(age = age_seq))
+lines(age_seq, values_expL, col= "green", lwd = 3)
+
+logist <- nls(mass~ mmax/(1+exp(-r*(age-age0))), data=dino, 
+              start = list(r = 0.8, age0 = 2, mmax = 29.6727))  
+#mmax = 100 (max size), r =1, age0/inflect = 10
+values_logist <- predict(logist, newdata = data.frame(age = age_seq))
+lines(age_seq, values_logist, col= "red", lwd = 3)
+
+#starting values selection:
+#linear curve: there is an actual intercept, slope: 5 y = +5 mass, slope = 1
+# exp: age = 0, mass = a, a is the initial mass at birth, careful a>0 because exp function is bound by 0. 
+# for r: exp is close to linear. approx: a+ a*r*x at small numbers. To maintain that, r must be 1.
+# logistic: MMax not display on the data. must interpolate to large  value. 
+#Inflect point is in the middle of the logistic curve
+```
+
+
+
+
+### Comparing AIC values
+
+_Compare the three models using AICc. Which model is the best? What are the dAICc values and the Akaike weights for the three models? How do you interpret these results in terms of the relative support for the three models?_
+
+AIC: Akaike Information Criterion, helps to evaluate the strength of a model. The smaller the value the better.  
+
+```{r}
+AIC_results <- tibble(AIC(lin, expL, logist))
+AIC_results$model <- c("lin", "expL", "logist")
+AIC_results <- AIC_results %>% relocate(model, .before = df)
+AIC_results 
+```
+
+
+### Model Selection 
+model.sel() to get the AIC numbers, delta AIC and weight
+2 is a rough threshold for the AIC suport value 
+```{r}
+model.sel(lin, expL, logist)
+```
+#### Interpretation
+- From the results above, we can see that the logistical model has the smallest AIC number indicating that it's a better model.
+- Large Delta AIC and low Akaike weights in the linear and the exponential models suggest that those models are not the best supported models and do not properly reflect the pattern of the data. 
+
+## Question 2
+_What is the estimated exponential growth rate (r) for the exponential and logistic models? What is the confidence interval on this parameter for the two models? For exponential growth, the doubling time is log(2)/r. How long does it take the dinosaur to double in size, based on the two models?_
+
+### Exponential Model
+```{r}
+summary(expL)
+confint(expL)
+log(2)/coef(expL)[2] # r = 0.32766
+```
+
+
+### Logistical Model 
+```{r}
+summary(logist)
+confint(logist)
+log(2)/coef(logist)[1] 
+```
+
+### Interpretation
+- The doubling time is 2.1 years for the exponential curve
+- The doubling time is 1.35 years for the logistic curve.
+
+## Question 3: Maximum size of the dinosaur
+_Is there evidence that this dinosaur has a maximum size? If so, what is the estimate for that size, and what is the confidence interval around that estimate? How does the estimated maximum size compare to the largest size in the data? How much stock do you put in the Mmax estimate, given the data we have? If this estimate of Mmax is true, about how big does this dinosaur get, relative to a human?_
+
+```{r}
+summary(logist)
+confint(logist)
+```
+
+### Interpretation
+
+- Only the logistic curve can give us a maximum size for the dinosaur. The exponential curve and the linear curve will increase to infinity. 
+- Based on the model coefficient, the maximum size is a mass of 43 (kg?). 
+- The confidence interval around max mass is [37.3, 51.45]
+
+## Question 4: Cross validation of models (Leave one out method)
+_Now compare the three models using leave-one-out cross-validation. Which model is the best at predicting the data, in terms of LOOCV? What is the typical difference between the predicted values and the observed values for the best model? Does cross-validation yield the same ranking of models as AICc?_
+
+### Linear model 
+```{r}
+diff_data = vector()
+
+for( i in 1: nrow(dino)){
+  data <- dino[-i,]
+  lin <- nls(mass~a*age, data=dino, start = list(a=0.01))
+  diff_data[i] = dino$mass[i] - predict(lin, data.frame(age = dino$age[i]))
+}
+cross_val1 <- sqrt(mean(diff_data^2))
+cross_val1
+```
+
+### Exponential model 
+```{r}
+diff_data = vector()
+
+for( i in 1: nrow(dino)){
+  data <- dino[-i,]
+  expL<- nls(mass~a*exp(r*age), data=dino, start = list(a=0.01, r= 1)) 
+  diff_data[i] = dino$mass[i] - predict(expL, data.frame(age = dino$age[i]))
+}
+cross_val2 <- sqrt(mean(diff_data^2))
+cross_val2
+```
+
+### Logistic model 
+```{r}
+diff_data = vector()
+
+for( i in 1: nrow(dino)){
+  data <- dino[-i,]
+  logist <- nls(mass~ mmax/(1+exp(-r*(age-age0))), data=dino, 
+              start = list(r = 0.8, age0 = 2, mmax = 29.6727)) 
+  diff_data[i] = dino$mass[i] - predict(logist, data.frame(age = dino$age[i]))
+}
+cross_val3 <- sqrt(mean(diff_data^2))
+mean(diff_data)
+cross_val3
+```
+
+
+### Interpretation
+- the best model has the smallest value which is the logistic model. 
+- the mean value of the difference between the values is -0.153.
+- the ranking of cross validation is the same as the AICc.
+
+
+
+
+
+
+
+
+
+
+
+

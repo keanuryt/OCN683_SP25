@@ -59,6 +59,11 @@ Q1_full <- glmmTMB(total_prey~predators*temp_factor, data = bug)
 ```
 
 ```{r}
+#corrected
+Q1_full <- glmmTMB(total_prey~predators*temp_factor, data = bug, family = 'nbinom2')
+```
+
+```{r}
 #Visualizing the effects plots of full and reduced models.
 plot(allEffects(Q1_full))
 ```
@@ -70,13 +75,27 @@ Q1_reduced <- glmmTMB(total_prey~predators + temp_factor, data = bug)
 ```
 
 ```{r}
+#corrected
+Q1_reduced <- glmmTMB(total_prey~predators + temp_factor, data = bug, family = 'nbinom2')
+Q1_reduced_temp<- glmmTMB(total_prey~predators, data = bug, family = 'nbinom2')
+```
+
+```{r}
 # comparing the models with the anova() function
 ## p = 0.3, the interaction is not significant 
 anova(Q1_full,Q1_reduced)
 ```
 
+```{r}
+#corrected
+anova(Q1_full, Q1_reduced, Q1_reduced_temp)
+```
+
+
+
 ### Testing the parameters individually
 #### Predators
+
 ```{r}
 Q1_predators <- glmmTMB(total_prey~predators, data = bug)
 ```
@@ -117,7 +136,17 @@ c. _Using the best model (i.e., the lowest AIC), perform marginal likelihood rat
 
 ```{r}
 zi_full <- glmmTMB(total_prey~predators*temp_factor, ziformula =~ 1, # zero inflated formula
-                 data = bug)
+                 data = bug) #no need this one. It's incorrect anyway
+zi_nb <- glmmTMB(total_prey~predators*temp_factor, ziformula =~ 1, # zero inflated formula
+                 data = bug, family = 'nbinom2')
+zi_poisson <- glmmTMB(total_prey~predators, ziformula =~ 1, # zero inflated formula
+        data = bug, family = 'poisson')
+
+```
+
+```{r}
+#zi_full <- glmmTMB(total_prey~predators*temp_factor, ziformula =~ 1, # zero inflated formula
+                 #data = bug) #no need this one. It's incorrect anyway
 zi_nb <- glmmTMB(total_prey~predators*temp_factor, ziformula =~ 1, # zero inflated formula
                  data = bug, family = 'nbinom2')
 zi_poisson <- glmmTMB(total_prey~predators, ziformula =~ 1, # zero inflated formula
@@ -129,15 +158,18 @@ zi_poisson <- glmmTMB(total_prey~predators, ziformula =~ 1, # zero inflated form
 ## It looks like the zero inflated model without specifying a family of function has the smallest AIC number
 anova(Q1_full, zi_full, zi_nb, zi_poisson)
 ```
+```{r}
+anova(Q1_full, zi_nb, zi_poisson)
+```
 
 ```{r}
-plot(allEffects(zi_full))
+plot(allEffects(zi_nb))
 ```
 
 
 ### Testing the interaction
 ```{r}
-zi_reduced <- glmmTMB(total_prey~predators+temp_factor, ziformula =~ 1, data = bug)
+zi_reduced <- glmmTMB(total_prey~predators+temp_factor, ziformula =~ 1, data = bug,family = 'nbinom2')
 ```
 
 ```{r}
@@ -148,7 +180,7 @@ anova(zi_full, zi_reduced)
 ### Testing individual variable
 #### Predators
 ```{r}
-zi_pred <- glmmTMB(total_prey~predators, ziformula =~ 1, data = bug)
+zi_pred <- glmmTMB(total_prey~predators, ziformula =~ 1, data = bug,family = 'nbinom2')
 ```
 
 ```{r}
@@ -158,13 +190,19 @@ anova(zi_reduced, zi_pred)
 
 #### Temperature
 ```{r}
-zi_temp <- glmmTMB(total_prey~temp_factor, ziformula =~ 1, data = bug)
+zi_temp <- glmmTMB(total_prey~temp_factor, ziformula =~ 1, data = bug,family = 'nbinom2')
 ```
 
 ```{r}
 # p < 0.05
 anova(zi_reduced, zi_temp)
 ```
+
+```{r}
+# Corrected 
+anova(zi_nb,zi_reduced, zi_temp, zi_pred)
+```
+
 
 ### Answer Q2
 
@@ -181,7 +219,7 @@ bug <- bug %>% mutate(pred_cat = ifelse(predators == "none", "No Predators", "Pr
 ```
 
 ```{r}
-Q3_zi_full <- glmmTMB(total_prey~pred_cat*temp_factor, ziformula =~ 1, data = bug)
+Q3_zi_full <- glmmTMB(total_prey~pred_cat*temp_factor, ziformula =~ 1, data = bug,family = 'nbinom2' )
 ```
 
 ```{r}
@@ -226,6 +264,7 @@ anova(Q3_zi_full, Q3_zi_temp)
 - Predator: The predator effect is significant. The presence of predator changes the number of Collembole in a mesocosm. However, as we saw previously, the community composition of predators does not have a significant effect on the preys, but the presence of predators as a whole affects the prey population.
 - Temperature:the effect is comparable to Q2. Significant effect of temperature on the prey count. 
 
+![](/Users/keanurochette/Desktop/Git Hub Repository/OCN683_SP25/HW7/scripts/IMG_0900.jpeg)
 
 ## Question 4
 ```{r}
@@ -280,5 +319,8 @@ summary(zi_full)
 - Zeros are less likely to be inflated with predators HA+HM because that combination of predators has a coefficient less than zero. 
 - I'm not sure what the count model is... Sorry. 
 
-
+Corrected:
+- Extra zero at higher T
+- greater pred suppression at hi T, and also more extra zeros regardless of the pred treatment
+- Potential population instability
 
