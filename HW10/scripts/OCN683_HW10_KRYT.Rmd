@@ -1,0 +1,283 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 10 - PCR data
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE)
+```
+
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(gt)
+library(gtExtras)
+library(grid)
+library(patchwork)
+
+# Data analysis/statistics 
+#library(glmmTMB)
+library(car) #ANOVA
+library(ggResidpanel) #residual panel
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(MuMIn)
+#library(arm) #discrete.histogram() function
+#library(MASS) #required for arm package
+```
+
+## Load data
+
+```{r}
+alawai <- read_csv(here("HW10", "data", "AlaWai_Bottles.csv"))
+alawai <- clean_names(alawai)
+colnames(alawai)
+```
+
+
+
+## Question 1
+
+```{r, fig.width = 8, fig.height= 10}
+Vxseason <- ggplot(alawai, aes(season, vvh_a, fill = season)) +
+  geom_boxplot()+
+  labs(title= "Vibrio by seasons", 
+       x= "Season", y = "log10.Vibrio Concentration (copies/mL)")+
+  scale_y_log10()+
+  theme_bw() +
+  theme(legend.position = "none")
+
+Vxdepth <- alawai %>%  mutate(site = factor(site)) %>% 
+  ggplot( aes(depth, vvh_a, color = site)) +
+  geom_point()+
+  labs(title= "Vibrio by depth", 
+       x= "log10.Depth", y = "log10.Vibrio Concentration (copies/mL)")+
+  scale_x_log10()+ 
+  scale_y_log10()+
+  theme_bw() 
+
+Vxsampledepth <- ggplot(alawai, aes(sample_depth, vvh_a, fill = sample_depth)) +
+  geom_boxplot()+
+  labs(title= "Vibrio by depth category", 
+       x= "Depth Category", y = "log10.Vibrio Concentration (copies/mL)")+
+  scale_y_log10()+
+  theme_bw()+ 
+  theme(legend.position = "none")
+
+sea_lab <- grobTree(textGrob("Ocean", x=0.05,  y=0.95, hjust=0,
+  gp=gpar(col="red", fontsize=13)))
+land_lab <- grobTree(textGrob("Land", x=0.9,  y=0.95, hjust=0,
+  gp=gpar(col="red", fontsize=13)))
+
+Vxsite <- alawai %>% mutate(site = factor(site)) %>% 
+  ggplot(aes(site, vvh_a, fill = site)) +
+  geom_boxplot()+
+  labs(title= "Vibrio by site", 
+       x= "Site", y = "log10.Vibrio Concentration (copies/mL)")+
+  annotation_custom(sea_lab)+
+  annotation_custom(land_lab)+
+ scale_y_log10()+
+  theme_bw()+
+  theme(legend.position = "none")
+
+Vxseason / (Vxdepth + Vxsampledepth)/ Vxsite
+
+```
+
+### Model setup
+
+```{r}
+model0 <- lm(vvh_a ~ sample_depth + site + season+ 
+               sample_depth:site + sample_depth:season + 
+               site: season, data = alawai)
+summary(model0)
+resid_panel(model0, plots = c("resid", "qq", "lev", "hist"))
+```
+
+
+```{r}
+logmodel0 <- lm(log(vvh_a) ~ sample_depth + site + season+ 
+               sample_depth:site + sample_depth:season + 
+               site: season, data = alawai)
+summary(logmodel0)
+
+```
+
+```{r}
+resid_panel(logmodel0, plots = c("resid", "qq", "lev", "hist"))
+```
+
+
+```{r}
+Anova(logmodel0)
+```
+
+### Interpretation
+
+
+
+## Question 2
+Rainfall_5Day, AirTemp, O2Conc, Salinity,
+WaterTemp, Turbidity, Chlorophyll, NOx, Silicate, POC, TotalP, Tyrosine.like, HIX, and
+VisibleHumic.like
+
+```{r}
+alawai2 <- alawai %>%  select(vvh_a, rainfall_5day, air_temp,o2conc, salinity, water_temp, turbidity, chlorophyll, n_ox, silicate, poc, total_p, tyrosine_like, hix, visible_humic_like) 
+```
+
+
+```{r}
+plot_var <- colnames(alawai2)
+
+plots <- vector(mode = "list", length = 1)
+i = 1
+for(var in plot_var){
+  p <- ggplot(alawai2, aes_string(var, "vvh_a"))+
+                geom_point()+
+    scale_y_log10()+
+    labs(title = paste("Vibrio vs.", var ))
+  plots[[i]]<-p
+  i <- i+1
+}
+
+```
+
+```{r, fig.width=10,fig.height=10}
+combined_plot <- wrap_plots(plots, ncol = 4)  # 4 columns × 4 rows
+combined_plot
+```
+
+## Single Model Predictor
+
+_Start by making single-predictor models for each of the 14 predictors listed above.  _
+_Which predictors, on their own, best explain V. vulnificus concentration? If you make an AIC table of the 14 models, what do the Akaike weights look like? What does this mean?  _
+_Note that in order to compare models by AIC each model needs to use the same set of samples (rows) – this means you should remove any rows that include NAs for any of the 14 predictors, or for the response variable, before fitting any of the models.  _
+_What is the downside of using only single-predictor models in this context?_
+
+```{r}
+alawai2<- alawai2 %>% na.omit()
+```
+
+```{r}
+mod_a <- lm(log10(vvh_a) ~ rainfall_5day, data = alawai2)
+mod_b <- lm(log10(vvh_a) ~ air_temp, data = alawai2)
+mod_c <- lm(log10(vvh_a) ~ o2conc, data = alawai2)
+mod_d <- lm(log10(vvh_a) ~ salinity, data = alawai2)
+mod_e <- lm(log10(vvh_a) ~ water_temp, data = alawai2)
+mod_f <- lm(log10(vvh_a) ~ turbidity, data = alawai2)
+mod_g <- lm(log10(vvh_a) ~ chlorophyll, data = alawai2)
+mod_h <- lm(log10(vvh_a) ~ n_ox, data = alawai2)
+mod_i <- lm(log10(vvh_a) ~ silicate, data = alawai2)
+mod_j <- lm(log10(vvh_a) ~ poc, data = alawai2)
+mod_k <- lm(log10(vvh_a) ~ total_p, data = alawai2)
+mod_l <- lm(log10(vvh_a) ~ tyrosine_like, data = alawai2)
+mod_m <- lm(log10(vvh_a) ~ hix, data = alawai2)
+mod_n <- lm(log10(vvh_a) ~ visible_humic_like, data = alawai2)
+```
+
+
+```{r}
+summary(mod_n)
+#mod_a, b, d,e, f, h, i, j, k,l, m,n
+# All parameters except O2 concentration and chlorophyll are significantly associated with Vibrio.
+```
+
+
+```{r}
+aic_table <- model.sel(mod_a,mod_b,mod_c ,mod_d ,mod_e ,mod_f ,
+                       mod_g ,mod_h ,mod_i ,mod_j , mod_k, mod_l, 
+                       mod_m, mod_n)
+aic_table
+```
+
+### Interpretation
+- Most of the weight is in model for visible humic like material suggesting that that variable is most correlated with the presence of Vibrio. 
+- Single variable models give the impression that all the variables are able to explain the presence of Vibrio in the Alawai. But when we look at the models together, some of the variables are more heavily associated with Vibrio. 
+
+## All inclusive model
+_Now make one big model that contains all 14 predictors. Do marginal null hypothesis tests on the predictors. Which seem important for explaining V. vulnificus? Collectively, how much variation in V. vulnificus concentration can be explained? What is a potential downside of this approach to inference (i.e., one big model with marginal tests)?_
+
+```{r}
+model1 <- lm(log10(vvh_a) ~ rainfall_5day+ air_temp+ o2conc+ salinity+ water_temp+ turbidity+ chlorophyll+ n_ox+ silicate+ poc+ total_p+ tyrosine_like+ hix+visible_humic_like, data = alawai2) 
+```
+
+```{r}
+summary(model1)
+```
+
+```{r}
+resid_panel(model1, plots = c("resid", "qq", "lev", "hist"))
+```
+
+
+
+```{r}
+Anova(model1)
+#marginal null hypothesis test
+```
+
+### Interpretation
+- According to the Anova, The 5 day rainfall and the silicate variables are the most important variables associated with Vibrio. 
+- It is possible that adding all these variables in one model "dilutes" the pattern and the contribution of other variables. 
+
+
+
+### Sum of weight 
+
+```{r}
+residualPlots(model1)
+```
+
+```{r}
+model2 <- lm(log10(vvh_a) ~ log10(rainfall_5day) + air_temp+ o2conc+ sqrt(salinity) + water_temp+ log10(turbidity)+ log10(chlorophyll)+ log10(n_ox)+ log10(silicate) + log10(poc)+ total_p+ log10(tyrosine_like)+ hix+visible_humic_like, data = alawai2, na.action = na.fail) 
+```
+
+```{r}
+summary(model2)
+model2_dredge <- dredge(model2)
+```
+
+```{r}
+sw(model2_dredge)
+```
+
+### Interpretation 
+- silica, rainfall, turbidity, air temp, and water temp are the most associated variation with a sum of weight equal to 1, when the variables are log10. 
+
+
+## Best model
+
+```{r}
+model3 <- lm(log10(vvh_a) ~ log10(rainfall_5day) + air_temp+ water_temp+ log10(turbidity)+  log10(silicate), data = alawai) 
+```
+
+```{r}
+resid_panel(model3, plots = c("resid", "qq", "lev", "hist"))
+```
+
+
+```{r}
+plot(allEffects(model3))
+```
+
+
+### Interpretation
+
+- The mechanisms for the presence of Vibrio could be the following: 
+- Typically, higher air temperature causes lower pressure systems to form about the island which results in rainfall. Increased rainfall washes Vibrio on land into the ala wai. Runoffs cause the turbidity to increase. Increased water on land may cause a surge of groundwater wish explains the higher concentration of silicate in the water. Added freshwater in the ala wai causes water temperature to decrease. 
+
+
+
+
+
+
