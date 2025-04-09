@@ -1,0 +1,308 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: 'HW 11 - GAMs '
+output: 
+  html_document: 
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggResidpanel) #residual panel
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(MuMIn)
+library(gam)
+library(mgcv)
+
+```
+
+
+## Load data
+
+```{r}
+FCM <- read_csv(here("HW11", "data", "HOT_cyto_counts.csv"))
+MLDS <- read_csv(here("HW11", "data", "hot_mlds.csv"))
+
+FCM <- clean_names(FCM)
+MLDS <- clean_names(MLDS)
+
+```
+
+```{r}
+# reformating the date and extracting the day of the year
+# pressure turned negative for easier visualization later on 
+FCM <- FCM %>% mutate(cal_date = mdy(date)) %>% relocate(cal_date, .after= date) %>% 
+  mutate(doyear = yday(cal_date)) %>% relocate(doyear, .after= cal_date) %>% 
+  mutate(press = -1*press)
+```
+
+
+## Question 1 
+
+```{r, fig.width= 10, fig.height=6}
+# making models of the microbes as a fucntion of pressure only 
+proxdepth <- gam(sqrt(pro) ~ s(press), data= FCM)
+hbactxdepth <- gam(hbact ~ s(press), data= FCM)
+picoeukxdepth <- gam(sqrt(picoeuk)~ s(press), data= FCM)
+
+par(mfrow = c(1,3))
+plot(proxdepth, main = "pro", residuals = TRUE, cex = 4, lwd = 3, shade = TRUE, shade.col = "green")
+plot(hbactxdepth, main = "hbact", residuals = TRUE, cex = 4, lwd = 3, shade = TRUE, shade.col = "red")
+plot(picoeukxdepth, main= "pico euk", residuals = TRUE, cex = 4, lwd = 3, shade = TRUE, shade.col = "royalblue")
+```
+
+
+
+
+```{r, fig.width= 10, fig.height=6}
+# making models of the microbes as a fucntion of day of year only 
+proxday <- gam(pro ~ s(doyear), data= FCM)
+hbactxday <- gam(hbact ~ s(doyear), data= FCM)
+picoeukxday <- gam(sqrt(picoeuk)~ s(doyear), data= FCM)
+
+par(mfrow = c(1,3))
+plot(proxday, main = "pro", residuals = TRUE, cex = 4, lwd = 3, shade = TRUE, shade.col = "green")
+plot(hbactxday, main = "hbact", residuals = TRUE, cex = 4, lwd = 3, shade = TRUE, shade.col = "red")
+plot(picoeukxday, main = "pico euk", residuals = TRUE, cex = 4, lwd = 3, shade = TRUE, shade.col = "royalblue")
+```
+
+### Comprehesion models for each microbe
+
+```{r}
+# making the comprehensive model with pressure and day of year for prochlorococcus
+pro2D <- gam(sqrt(pro) ~ s(doyear, press), data= FCM) 
+pro2D_X <- gam(sqrt(pro) ~ s(doyear) + s(press), data= FCM) 
+summary(pro2D)
+``` 
+
+```{r}
+anova(pro2D, pro2D_X)
+```
+
+#### Interpretation
+
+The F value of the anova is significant which means that the interaction between depth and day of year explains the variation in abundance more than the variables alone.
+
+
+```{r}
+# making the comprehensive model with pressure and day of year for het bacteria
+hbact2D <- gam(hbact ~ s(doyear, press), data= FCM) 
+hbact2D_X <- gam(hbact ~ s(doyear) + s(press), data= FCM) 
+summary(hbact2D)
+``` 
+
+```{r}
+anova(hbact2D, hbact2D_X)
+```
+#### Interpretation
+
+The F value of the anova is significant which means that the interaction between depth and day of year explains the variation in abundance more than the variables alone.
+
+
+```{r}
+# making the comprehensive model with pressure and day of year for pico eukaryotes
+picoeuk2D <- gam(sqrt(picoeuk) ~ s(doyear, press), data= FCM) 
+picoeuk2D_X <- gam(sqrt(picoeuk) ~ s(doyear) + s(press), data= FCM) 
+summary(picoeuk2D)
+``` 
+
+```{r}
+anova(picoeuk2D,picoeuk2D_X)
+```
+#### Interpretation
+
+The F value of the anova is significant which means that the interaction between depth and day of year explains the variation in abundance more than the variables alone.
+
+
+```{r, fig.width=10, fig.height=6}
+par(mfrow = c(1,3))
+plot(pro2D, main = "pro", residuals = TRUE, cex = 4, lwd = 3, cex.main = 3)
+abline(v = 60, col = "pink",lwd = 3) #spring
+abline(v = 152, col = "green",lwd = 3) #summer
+abline(v = 244, col = "orange",lwd = 3) # fall
+abline(v = 335, col = "skyblue",lwd = 3) # winter
+plot(hbact2D, main = "hbact", residuals = TRUE, cex = 4, lwd = 3, cex.main = 3)
+abline(v = 60, col = "pink",lwd = 3) #spring
+abline(v = 152, col = "green",lwd = 3) #summer
+abline(v = 244, col = "orange",lwd = 3) # fall
+abline(v = 335, col = "skyblue",lwd = 3) # winter
+plot(picoeuk2D, main = "pico euk", residuals = TRUE, cex = 4, lwd = 3, cex.main = 3)
+abline(v = 60, col = "pink",lwd = 3) #spring
+abline(v = 152, col = "green",lwd = 3) #summer
+abline(v = 244, col = "orange",lwd = 3) # fall
+abline(v = 335, col = "skyblue",lwd = 3) # winter
+```
+
+```{r, fig.width=12, fig.height=6}
+par(mfrow = c(1,3))
+vis.gam(pro2D, view = c("doyear", "press"), plot.type = "contour")
+abline(v = 60, col = "pink",lwd = 3) #spring
+abline(v = 152, col = "green",lwd = 3) #summer
+abline(v = 244, col = "orange",lwd = 3) # fall
+abline(v = 335, col = "skyblue",lwd = 3) # winter
+vis.gam(hbact2D, view = c("doyear", "press"), plot.type = "contour")
+abline(v = 60, col = "pink",lwd = 3) #spring
+abline(v = 152, col = "green",lwd = 3) #summer
+abline(v = 244, col = "orange",lwd = 3) # fall
+abline(v = 335, col = "skyblue",lwd = 3) # winter
+vis.gam(picoeuk2D, view = c("doyear", "press"), plot.type = "contour")
+abline(v = 60, col = "pink",lwd = 3) #spring
+abline(v = 152, col = "green",lwd = 3) #summer
+abline(v = 244, col = "orange",lwd = 3) # fall
+abline(v = 335, col = "skyblue",lwd = 3) # winter
+```
+
+
+## Question 2
+
+```{r}
+FCM_long <- FCM %>% 
+  pivot_longer(cols = hbact:picoeuk,
+                     names_to = "microbe", 
+                     values_to = "micr_conc") %>% 
+  filter(microbe != "syn") %>% 
+  mutate(microbe = factor(microbe, levels= c("pro", "hbact", "picoeuk"))) 
+
+```
+
+### Setting up the model
+```{r}
+microbe_model <- gam(micr_conc ~ s(doyear, press, by = microbe) + microbe, data= FCM_long) 
+summary(microbe_model)
+```
+
+```{r, fig.width=12, fig.height=6}
+# I don't know why my picoeukaryotes plot shows a linear trend instead of a contour plot...
+par(mfrow = c(1,3))
+plot(microbe_model, residuals = TRUE, cex = 4, lwd = 3, cex.main = 3)
+```
+
+
+
+### Interpretation
+**(a) Do the different kinds of microbes have different mean abundances?**  
+Yes, we saw that the estimated intercepts are different with the summary(microbe_model). 
+
+**(b) Do the different kinds of microbes have different average depth distributions (i.e., averaging over time)?**
+
+```{r}
+# we can compare the full model to a model in which only the depth (pressure) is accounted for in the variation of abundance of the microbes
+microbe_depth <- gam(micr_conc ~ s(press, by = microbe) + microbe, data= FCM_long) 
+```
+
+```{r}
+par(mfrow = c(1,3))
+plot(microbe_depth)
+```
+
+```{r}
+# The F value of the anova is significant for pro and hbact which means that they are differently distributed on average by depth when averaging over time.
+summary(microbe_depth)
+```
+
+
+**(c) Do the different kinds of microbes have different average seasonal dynamics (i.e., averaging over depths)**
+
+```{r}
+# we can make a model that only accounts for the day of the year as a predictor for the variation in microbe abundance
+microbe_doyear <- gam(micr_conc ~ s(doyear, by = microbe) + microbe, data= FCM_long) 
+```
+
+```{r}
+par(mfrow = c(1,3))
+plot(microbe_doyear)
+```
+
+```{r}
+# the F value of the anova is only significant for hbact, which means that hetero trophic bacteria are distributed differently throughout the year. 
+summary(microbe_doyear)
+```
+
+
+## Question 3 
+
+```{r}
+MLDS<- MLDS %>% rename(cruise = crn)
+```
+
+```{r}
+full_df <- left_join(FCM, MLDS, by = c("cruise", "date"))
+```
+
+
+```{r}
+HOT <- full_df %>% select(-julian, -syn, -botid, -x1) %>% 
+  # we only want the data of the top 45m 
+  filter(press <=45) %>%  
+  filter(mean  <=45) %>% 
+  pivot_longer(cols = hbact:picoeuk,
+                     names_to = "microbe", 
+                     values_to = "micr_conc") %>% 
+  mutate(microbe = factor(microbe, levels= c("pro", "hbact", "picoeuk"))) %>% 
+  rename(mixlay = mean)
+  
+```
+
+### Mixed Layer
+```{r}
+#ML_gam <- gam(micr_conc ~ s(press, by = microbe)+ s(doyear, mixlay, by = microbe) + microbe, data = HOT)
+ML_gam <- gam(micr_conc ~ s(mixlay, by = microbe) + microbe, data = HOT)
+```
+
+```{r}
+summary(ML_gam)
+```
+
+
+```{r, fig.width=10, fig.height=5}
+par(mfrow = c(1,3))
+plot(ML_gam)
+```
+
+#### Interpretation
+We can see that the heterotrophic bacteria are significantly associated with the variation in mixed layer depth. There is a peak of hbact abundance around 32m and a low in hbact abundance at 39m. 
+
+### Chlorophyll
+```{r}
+chl_gam <- gam(micr_conc ~ s(chl, by = microbe) + microbe, data = HOT)
+```
+
+```{r}
+summary(chl_gam)
+```
+
+
+```{r, fig.width=10, fig.height=5}
+par(mfrow = c(1,3))
+plot(chl_gam)
+```
+
+#### Interpretation
+
+- Prochlorococcus abundance vary with chlorophyll concentration. It looks like the maximum Prochlorococcus abnundance can be found wit 0.12ug/L of chlorophyll .
+- Heterotrophic bacteria varies similarly with variation of chlorophyll with a peak of hbact abundance at 0.10ug/L of chlorophyll. 
+
+
+
+
+
+
+
+
+
+
+
