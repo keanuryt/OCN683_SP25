@@ -1,0 +1,229 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 12- Mixed Model
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load Libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(grid)
+library(patchwork)
+
+# Data analysis/statistics 
+#library(glmmTMB)
+library(car) #ANOVA
+library(ggResidpanel) #residual panel
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(MuMIn)
+library(lme4)
+library(lmerTest)
+library(sjPlot)
+
+```
+
+
+## Load data
+```{r}
+archipel <- read_csv(here("HW12", "data", "cabral_arch_data.csv"))
+island <- read_csv(here("HW12", "data", "cabral_island_data.csv"))
+
+
+archipel <- clean_names(archipel)
+island <- clean_names(island)
+```
+
+## Question 1:
+_Make a model with species richness as the response, and with a random effect for Archipelago._  
+_What proportion of the variation in species richness occurs at the archipelago scale, and what proportion occurs within archipelagoes? Which archipelagoes are particularly diverse, and which are depauperate?_
+
+```{r}
+model1 <- lmer(log(species+1) ~ (1|archipelago), data = island)
+```
+
+```{r}
+summary(model1)
+```
+
+- **Variation between archipelago**: Stdev = 0.8, so back transformed is 10^0.8 -1 = 5.3. 5x difference.
+- **Variations within an archipelago** is the residual variance. Stdev = 0.91. Back transformed = 10^0.91 -1 = 7.12. 7x difference within an archipelago.
+
+
+```{r}
+plot_model(model1, type = "re")
+```
+With an arbitrary limit of 1 and -1:  
+
+- **Diverse archipelagos**: Canaries and Baleric Islands
+- **Depauperate archipelagos**: Phoenix islands and Iles Crozet
+
+## Question 2: 
+
+_Now let’s think about the six predictors. Make some exploratory plots of the effect of each variable on richness, plotted at the appropriate scale. You’ll need to merge the data sets. Think about which predictors might need to be transformed for use in a linear model._
+
+```{r}
+biogeo <- left_join(archipel, island, by = "archipelago")
+biogeo <- biogeo %>%  select(-x1.x, -x1.y)
+summary(biogeo)
+```
+
+```{r, warning=FALSE, fig.width = 12, fig.height=6}
+(ggplot(biogeo, aes(sqrt(number_islands), log10(species+1)))+ geom_point() + geom_smooth(method = "lm")) +
+  (ggplot(biogeo, aes(sqrt(distance), log10(species+1) ))+ geom_point()+geom_smooth(method = "lm") )+ 
+  (ggplot(biogeo, aes(sqrt(age), log10(species+1)))+ geom_point()+geom_smooth(method = "lm"))+
+  (ggplot(biogeo, aes(log10(area), log10(species+1))) + geom_point() + geom_smooth(method = "lm")) +
+  (ggplot(biogeo, aes(log10(elev), log10(species+1)))+ geom_point()+geom_smooth(method = "lm"))+
+  (ggplot(biogeo, aes(temp,log10(species+1)))+ geom_point()+geom_smooth(method = "lm"))
+```
+
+
+## Question 3
+
+_Construct mixed model(s) that test the roles of the six predictors in explaining species richness._
+
+_Plot fitted (fixed) effects as well as random effect estimates, plus model diagnostics._  
+
+_Calculate how much variation the predictors explain, at the two different scales in the data (island and archipelago)? i.e., present R^2 values for the two scales. Also, how much of the total variation have they explained, according to R^2[GLMM(m)]?_
+
+### Number of Islands
+```{r}
+n_isl <- lmer(log(species+1) ~ sqrt(number_islands) + (1|archipelago), data = biogeo)
+
+(plot_model(n_isl, type = "re")) + 
+  (plot_model(n_isl, type = "eff", terms = c('number_islands'))) + 
+  (plot_model(n_isl, type = "diag")[[1]])
+
+anova(n_isl, type = '2')
+VarCorr(n_isl)
+```
+
+### Area
+
+```{r}
+mod_area <- lmer(log(species+1) ~ log10(area) + (1|archipelago), data = biogeo)
+(plot_model(mod_area, type = "re")) + 
+  (plot_model(mod_area, type = "eff", terms = c('area'))) + 
+  (plot_model(mod_area, type = "diag")[[1]])
+
+anova(mod_area, type = '2')
+VarCorr(mod_area)
+```
+
+### Distance to continent
+```{r}
+mod_dist <- lmer(log(species+1) ~ sqrt(distance) + (1|archipelago), data = biogeo)
+(plot_model(mod_dist, type = "re")) + 
+  (plot_model(mod_dist, type = "eff", terms = c('distance'))) + 
+  (plot_model(mod_dist, type = "diag")[[1]])
+
+anova(mod_dist, type = '2')
+VarCorr(mod_dist)
+```
+
+
+### Age
+```{r}
+mod_age <- lmer(log(species+1) ~ sqrt(age) + (1|archipelago), data = biogeo)
+(plot_model(mod_age, type = "re")) + 
+  (plot_model(mod_age, type = "eff", terms = c('age'))) + 
+  (plot_model(mod_dist, type = "diag")[[1]])
+
+anova(mod_age, type = '2')
+VarCorr(mod_age)
+```
+
+### Elevation 
+```{r}
+mod_elev <- lmer(log(species+1) ~ elev + (1|archipelago), data = biogeo)
+(plot_model(mod_elev, type = "re")) + 
+  (plot_model(mod_elev, type = "eff", terms = c('elev'))) + 
+  (plot_model(mod_elev, type = "diag")[[1]])
+
+anova(mod_elev, type = '2')
+VarCorr(mod_elev)
+```
+
+### Temperature
+```{r}
+mod_temp <- lmer(log(species+1) ~ temp + (1|archipelago), data = biogeo)
+
+(plot_model(mod_temp, type = "re")) + 
+  (plot_model(mod_temp, type = "eff", terms = c('temp'))) + 
+  (plot_model(mod_temp, type = "diag")[[1]])
+
+anova(mod_temp, type = '2')
+VarCorr(mod_temp)
+```
+
+### Interpretation 
+- Area: very significant, can explain about half the variation, larger areas = more spp richness
+- Elevation: significant and explains 25% of the variation in data, higher mountains = more spp richness
+- Distance to continent: significant but can't explain the variation in data
+- Number of island: not significant, does not explain the variation 
+- Age of oldest island: not significant, can't explain the variation in the data
+- Temperature: not significant and can't explain the variation in data  
+
+Most promising explanatory variables: area, elevation, distance
+
+## Question 4
+### Making the model
+
+```{r, fig.height= 6, fig.width=12}
+model_hyp <- lmer(log(species+1) ~ log10(area)*elev + elev + sqrt(distance) + (1|archipelago), data = biogeo)
+
+(plot_model(model_hyp, type = "re")) + 
+  (plot_model(model_hyp, type = "eff", terms = c('area','distance', 'elev'))) + 
+  (plot_model(model_hyp, type = "diag")[[1]])
+
+summary(model_hyp)
+VarCorr(model_hyp)
+```
+ 
+### Model with no interaction 
+```{r,fig.height= 6, fig.width=12}
+model_hyp_no_interaction <- lmer(log(species+1) ~ log10(area) + elev + sqrt(distance) + (1|archipelago), data = biogeo)
+
+summary(model_hyp_no_interaction)
+anova(model_hyp_no_interaction, type = "2")
+VarCorr(model_hyp_no_interaction)
+
+(plot_model(model_hyp_no_interaction, type = "re")) +
+  (plot_model(model_hyp_no_interaction, type = "eff", terms = c('area','distance', 'elev'))) + 
+  (plot_model(model_hyp_no_interaction, type = "diag")[[1]])
+```
+
+### Interpretation 
+- There is no interactions between the area of an island and it's elevation. 
+- From the anova, the area has a significant F-value, indicating that it's the most likely explanatory variable. 
+- Removing the interaction improve the Residual std. dev slightly.  
+- The denDF are not equal, they are higher for the area and the elevation. But that's because the data are collected at the island scale. The distance denDF is lower because it's measured at the archipelago scale. 
+
+**Conclusion**: the area of an island is highly associated with the species richness. The larger the island, the higher the species richness. 
+
+### AICc
+```{r}
+AIC(model_hyp_no_interaction)
+model.sel(model_hyp_no_interaction,model_hyp)
+```
+
+AICc of the model with no interaction is slightly better the one with interaction, indicating a slightly better model. 
+
+
+
+
+
+
+
+
