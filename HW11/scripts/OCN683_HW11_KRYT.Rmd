@@ -45,10 +45,22 @@ MLDS <- clean_names(MLDS)
 ```{r}
 # reformating the date and extracting the day of the year
 # pressure turned negative for easier visualization later on 
-FCM <- FCM %>% mutate(cal_date = mdy(date)) %>% relocate(cal_date, .after= date) %>% 
-  mutate(doyear = yday(cal_date)) %>% relocate(doyear, .after= cal_date) %>% 
+FCM <- FCM %>% mutate(cal_date = mdy(date)) %>% 
+  relocate(cal_date, .after= date) %>% 
+  mutate(doyear = yday(cal_date)) %>% 
+  relocate(doyear, .after= cal_date) %>% 
   mutate(press = -1*press)
 ```
+```{r}
+## Correction 
+mod <- gam(log10(pro+0.01) ~ s(doyear, press, k =50), data= FCM)
+gam.check(mod)
+```
+
+```{r}
+plot(mod, scheme = 2, shift = coef(mod)[1], trans = exp)
+```
+
 
 
 ## Question 1 
@@ -181,9 +193,12 @@ FCM_long <- FCM %>%
 
 ### Setting up the model
 ```{r}
+
 microbe_model <- gam(micr_conc ~ s(doyear, press, by = microbe) + microbe, data= FCM_long) 
 summary(microbe_model)
 ```
+
+
 
 ```{r, fig.width=12, fig.height=6}
 # I don't know why my picoeukaryotes plot shows a linear trend instead of a contour plot...

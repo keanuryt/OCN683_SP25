@@ -54,6 +54,10 @@ model1 <- lmer(log(species+1) ~ (1|archipelago), data = island)
 ```
 
 ```{r}
+model1 <- lmer(log(species+1) ~ 1+ (1|archipelago), data = island)
+```
+
+```{r}
 summary(model1)
 ```
 
@@ -88,6 +92,12 @@ summary(biogeo)
   (ggplot(biogeo, aes(temp,log10(species+1)))+ geom_point()+geom_smooth(method = "lm"))
 ```
 
+```{r}
+##Correction???
+model_X <- lmer(log(species+1) ~ log(area) + log(elev+1) + temp +
+                 log(number_islands) + log(distance)+ log(age)+ (1|archipelago), data = biogeo)
+```
+
 
 ## Question 3
 
@@ -98,6 +108,11 @@ _Plot fitted (fixed) effects as well as random effect estimates, plus model diag
 _Calculate how much variation the predictors explain, at the two different scales in the data (island and archipelago)? i.e., present R^2 values for the two scales. Also, how much of the total variation have they explained, according to R^2[GLMM(m)]?_
 
 ### Number of Islands
+
+```{r}
+n_isl <- lmer(log(species+1) ~ 1 + (1|archipelago), data = biogeo)
+```
+
 ```{r}
 n_isl <- lmer(log(species+1) ~ sqrt(number_islands) + (1|archipelago), data = biogeo)
 

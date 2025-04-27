@@ -1,0 +1,343 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 13 - Local Adaptation of Ohia (Mixed Model)
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load libraries
+
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(patchwork)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggResidpanel) #residual panel
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(MuMIn)
+library(gam)
+library(lme4)
+library(sjPlot)
+library(lmerTest)
+library(performance)
+library(mgcv)
+```
+
+## Load data
+```{r}
+ohia <- read_csv(here("HW13", "data", "ohia_merged.csv"))
+ohia <- clean_names(ohia)
+```
+
+
+## Question 1
+
+### Drought, population and height  
+a) Using the seedlings that were harvested after the press drought treatment, analyze how seedling height varies among treatments and populations. Specifically, set up models to test whether populations differ in height, whether press drought treatment affects height and whether populations differ in how press drought affects height.
+
+```{r}
+ohia_harvested <- ohia %>% filter(fate == "harvest")
+```
+
+```{r}
+#whether populations differ in height
+mod_pop <- lmer(log10(height) ~ population + (1|block), data = ohia_harvested )
+```
+
+```{r}
+#whether the press drought treatment affects height
+mod_drought<- lmer(log10(height) ~ drought + (1|block), data = ohia_harvested )
+```
+
+```{r}
+# whether populations differ in how press drought affects height
+mod_popxdrought<- lmer(log10(height) ~ drought + (1|drought:population) + (1|block), data = ohia_harvested )
+```
+
+
+```{r, fig.width= 8, fig.height = 8}
+# i checked my models with the code below
+check_model(mod_popxdrought)
+```
+
+```{r}
+Anova(mod_pop, type = "2")
+Anova(mod_drought, type = "2")
+Anova(mod_popxdrought, type = "2")
+
+```
+
+
+#### Interpretation 
+
+- Population affects height significantly (p < 0.05)
+- Drought doesn't affects height significantly (p = 0.7)
+- There is no significant difference in how the population affects the effects of droughts on Ohia height (p = 0.98)
+
+### Historical rainfall and height
+b) Next, set up models to test whether historical rainfall at a site predicts the height of seedlings, and whether historical rainfall at a site predicts the effect of press drought on height.
+```{r}
+# historical rainfall at a site predicts the height of seedlings
+mod_marxpop <- lmer(log10(height) ~ mar + (1|block) + (1|mar:population), data = ohia_harvested)
+```
+
+
+```{r}
+# historical rainfall at a site predicts the effect of press drought on height.
+mod_marxpopxdrought<- lmer(log10(height) ~ mar * drought + (1|block)+ (1|mar:population),
+                           data = ohia_harvested)
+
+```
+
+```{r, fig.width = 8, fig.height = 8}
+Anova(mod_marxpop, type = "2")
+ranova(mod_marxpop)
+Anova(mod_marxpopxdrought, type = "3")
+ranova(mod_marxpopxdrought)
+```
+
+#### Interpretation
+
+- Historical rainfall at in a population does not affect the height of seedlings significantly.
+- Historical rainfall at in a population does not affect the effect of press drought on height significantly
+
+
+### Historical evapotranspiration 
+c) Finally, set up models to test whether historical evapotranspiration at a site predicts the height of seedlings, and whether historical evapotranspiration at a site predicts the effect of press drought on height.
+
+```{r}
+# historical evapotranspiration at a site predicts the height of seedlings
+mod_metxpop <- lmer(log10(height) ~ met + (1|block) + (1|met:population), data = ohia_harvested)
+```
+
+```{r}
+# historical evapotranspiration at a site predicts the effect of press drought on height
+mod_metxpopxdrought<- lmer(log10(height) ~ met * drought + (1|block)+ (1|met:population), 
+                           data = ohia_harvested)
+
+```
+
+```{r, fig.width = 8, fig.height = 8}
+Anova(mod_metxpop, type = "2")
+Anova(mod_metxpopxdrought, type = "3")
+```
+
+#### Interpretation 
+
+-  Historical evapotranspiration at in a population does not affect the height of seedlings significantly (p = 0.24)
+- Historical evapotranspiration at in a population does not affect the effect of press drought on height (p = 0.18 for met, p = 0.39 for drought and their interaction p = 0.35 )
+
+
+## Question 2
+Using the seedlings that were fated to be harvested after the press drought treatment, analyze how survival during the press drought is affected by the various potential predictors.  
+
+### Population, Drought and Mortability
+a) set up models to test whether populations vary in probability of mortality (i.e., the response column DEAD), whether the press drought treatment affects mean mortality, and whether populations vary in how mortality is affected by the press drought treatment. 
+
+```{r}
+# populations vary in probability of mortality
+glmm_pop <- glmer(dead ~ population + (1| block), data= ohia_harvested, family = "binomial")
+```
+
+```{r}
+# press drought treatment affects mean mortality
+glmm_drought <- glmer(dead ~ drought + (1| block), data= ohia_harvested, family = "binomial")
+```
+
+```{r}
+# whether populations vary in how mortality is affected by the press drought treatment
+glmm_popxdrought <- glmer(dead ~ drought+ (1+drought|population) + (1| block), data= ohia_harvested, family = "binomial")
+```
+
+```{r}
+Anova(glmm_pop, type= "2")
+Anova(glmm_drought, type= "2")
+Anova(glmm_popxdrought, type= "2")
+```
+
+```{r}
+anova(glmm_popxdrought, glmm_pop, glmm_drought)
+```
+
+
+#### Interpretation 
+
+- populations vary significantly in probability of mortality (p = 0.02 < 0.05)
+- press drought treatment affects  mortality significantly (p < 0.05)
+- the effect of drought treatment on mortality of seedlings is not effected by population variations (chi square p > 0.05)
+
+### Historical rainfall and mortality
+
+b) set up models to test whether historical rainfall at a site predicts
+mortality, and whether historical rainfall at a site predicts the effect of press drought on
+mortality. 
+```{r}
+# historical rainfall at a site predicts mortality
+glmm_marxpop <- glmer(dead ~ mar+ (1+mar|population) + (1| block), data = ohia_harvested, family = "binomial")
+```
+
+```{r}
+# whether historical rainfall at a site predicts the effect of press drought on mortality
+glmm_marxdroughtxpop <- glmer(dead ~ mar + (1+mar|drought)+ (1+mar|population) + (1| block), data = ohia_harvested, family = "binomial")
+```
+
+```{r}
+Anova(glmm_marxpop, type = "2")
+Anova(glmm_marxdroughtxpop, type = "2")
+```
+
+```{r}
+anova(glmm_marxpop, glmm_marxdroughtxpop)
+```
+
+
+#### Interpretation 
+- historical rainfall at a site significantly impact mortality (p<0.05)
+- historical rainfall at a site significantly impact the effect of drought on
+mortality (p <0.05 in the anova() )
+
+
+### Historical evapotranspiration, population, drought, and mortality 
+
+c) set up models to test whether historical evapotranspiration at a site
+predicts mortality, and whether historical evapotranspiration at a site predicts the effect of
+press drought on mortality.
+
+
+```{r}
+# historical evapotranspiration at a site predicts mortality
+glmm_met <- glmer(dead ~ met + (1+met |population) + (1| block), data = ohia_harvested, family = "binomial")
+```
+
+```{r}
+# historical evapotranspiration at a site predicts the effect of press drought on mortality
+glmm_metxdrought <- glmer(dead ~ met*drought +(1+met|population) + 
+                            (1| block), 
+                          data = ohia_harvested, family = "binomial")
+```
+
+
+control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5))
+```{r}
+Anova(glmm_met, type = "2")
+Anova(glmm_metxdrought, type = "2")
+```
+
+```{r}
+anova(glmm_met, glmm_metxdrought)
+```
+
+#### Interpretation
+- Evapotranspiration by itself does not significantly impact the mortality. 
+- Drought significantly impacts the mortality of Ohia and there is a significant interaction between evapotranspiration and drought (p < 0.05 in anova())
+
+
+## Question 3
+
+Using the seedlings that were fated for the terminal drought experiment (i.e., the seedlings
+that were not harvested), analyze how longevity during terminal drought is affected by the
+various potential predictors. 
+
+```{r}
+ohia_term <- ohia %>%  filter(fate != "harvested")
+```
+### Longevity, drought and population 
+
+a) set up models to test whether populations vary in longevity, whether the press drought treatment affects longevity, and whether populations vary in how longevity is affected by the press drought treatment.
+
+```{r}
+#populations vary in longevity
+long_pop <- lmer(log10(longevity) ~ population + (1| block), data = ohia_term)
+
+```
+
+```{r}
+#drought treatment affects longevity
+long_drought <- lmer(log10(longevity) ~ drought + (1| block), data = ohia_term)
+```
+
+```{r}
+#  populations vary in how longevity is affected by the press drought treatment
+long_popxdrought <- lmer(log10(longevity) ~ population*drought + (1| block), data = ohia_term)
+```
+
+
+```{r}
+Anova(long_pop,type = "2")
+Anova(long_drought,type = "2")
+Anova(long_popxdrought,type = "2")
+```
+
+```{r}
+anova(long_pop, long_drought, long_popxdrought)
+```
+
+#### Interpretation 
+
+- The population significantly affects the longevity of the ohia seedling (p < 0.05)
+- Drought treatment did not impact the longevity of the seedlings. There was no difference between the control and the drought treatments 
+- Drought treatment did not affect the longevity of the seedling between population 
+
+### Longevity and rainfall
+
+b) set up models to test whether historical rainfall at a site predicts longevity, and whether historical rainfall at a site predicts the effect of press drought on longevity. 
+```{r}
+# historical rainfall at a site predicts longevity
+long_mar <- lmer(log10(longevity) ~ mar + (1+mar|population) + (1| block), data = ohia_term)
+```
+
+```{r}
+# historical rainfall at a site predicts the effect of press drought on longevity
+long_marxdrought <- lmer(log10(longevity) ~ mar*drought + (1+mar|population) + (1| block), data = ohia_term)
+```
+
+```{r}
+Anova(long_mar, type = "2")
+Anova(long_marxdrought, type = "2")
+```
+
+```{r}
+anova(long_mar,long_marxdrought)
+```
+
+#### Interpretation 
+
+- Historical rainfall at a site significantly affects longevity of seedlings.
+- historical rainfall at a site significant impacted the effect of drought on longevity.
+
+### Longevity and evapotranspiration 
+c) set up models to test whether historical evapotranspiration at a site predicts longevity, and whether historical evapotranspiration at a site predicts the effect of press drought on longevity. How do you interpret the results?
+
+```{r}
+# historical evapotranspiration at a site predicts longevity
+long_met <- lmer(log10(longevity) ~ met + (1+met|population) + (1| block), data = ohia_term)
+
+```
+
+```{r}
+# historical evapotranspiration at a site predicts the effect of press drought on longevity
+long_metxdrought <- lmer(log10(longevity) ~ met*drought + (1+met|population) + (1| block), data = ohia_term)
+```
+
+
+```{r}
+Anova(long_met, type = "2")
+Anova(long_metxdrought, type = "2")
+```
+#### Interpretation 
+
+- Evapotranspiration at a site significantly affects longevity of seedlings. (p<0.05)
+- Evapotranspiration at a site significant did not impacted the effect of drought on longevity (p=0.23).
+
