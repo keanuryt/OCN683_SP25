@@ -1,0 +1,289 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: 'HW14 - Heterotrophic Bacteria '
+output: 
+  html_document: 
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(patchwork)
+library(cowplot)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggResidpanel) #residual panel
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(MuMIn)
+library(gam)
+library(lme4)
+library(sjPlot)
+library(lmerTest)
+library(performance)
+library(mgcv)
+library(forecast)
+```
+
+## Load data
+```{r}
+bacteria <- read_csv(here("HW14", "data", "hbact_size_temp.csv"))
+bacteria <- clean_names(bacteria)
+```
+
+
+
+## Question 1 
+Begin by exploring seasonal patterns in LNA abundance, cell size, biomass, and percent biomass, as well as temperature. I.e., make exploratory plots of these variables that focus on seasonality. 
+What have you learned so far?
+
+```{r, fig.width= 10, fig.height = 10}
+bacteria %>% select(date, season, day_of_year, lna_ab_uml, lna_bv, lna_b, percent_lna_bb, temp_5_m_e2) %>% 
+  mutate(date = dmy(date)) %>% 
+  pivot_longer(cols= c(lna_ab_uml:temp_5_m_e2), 
+               names_to = "variables", 
+               values_to = "values") %>% 
+  ggplot(aes(day_of_year, values))+
+  geom_point()+
+  geom_smooth()+
+  geom_vline(xintercept = 87.5, linetype = "dotdash",
+                color = "#F06292", size=1.5)+
+  geom_vline(xintercept = 180.5, linetype ="dotdash",
+                color = "#4CAF50", size=1.5)+
+  geom_vline(xintercept = 275, linetype ="dotdash",
+                color = "darkorange", size=1.5)+
+  geom_vline(xintercept = 0,  linetype ="dotdash",
+                color = "#1E88E5", size=1.5)+
+  facet_grid(variables~., scales = "free")+
+  labs(title = "Seasonal Variation of Bacteria")+
+  theme_bw()
+```
+
+```{r, fig.width= 10, fig.height = 5}
+bacteria %>% select(date, season, day_of_year, lna_ab_uml, lna_bv, lna_b, percent_lna_bb, temp_5_m_e2) %>% 
+  mutate(date = dmy(date), 
+         season = factor(season)) %>% 
+  pivot_longer(cols= c(lna_ab_uml:temp_5_m_e2), 
+               names_to = "variables", 
+               values_to = "values") %>% 
+  drop_na() %>% 
+  ggplot(aes(season, values))+
+  geom_boxplot(aes(fill = season))+
+  facet_wrap(.~variables, scales = "free", nrow = 1)+
+  labs(title = "Seasonal Variation of Bacteria")+
+  theme_bw()+
+  theme(legend.position = "none")+
+  scale_fill_manual(values=c("#1E88E5", "#F06292", "#4CAF50","darkorange"))
+```
+
+### Interpretation 
+
+- ‘LNA ab uml’ = LNA abundance (cells/mL), ‘LNA B’ = LNA total biomass (µgC/L) and Temperature (5m) exhibit the same pattern. Peak in the summer, Lowest in the winter, increase in the spring and decrease in the fall.
+- ‘LNA bv’ = LNA mean cell size (cubic microns) is shifted to the lefts. Peak in the spring, lowest in the fall. Increase in the winter and decrease during the summer. 
+- ‘%LNA BB’ = percent of total bacterial biomass in the LNA fraction, Peak in the summer, lowest in the spring. Fall and winter are periods of decrease. The increase is rapid between spring and summer. 
+
+
+## Question 2
+Now make new exploratory plots of the same five variables, focusing on longer-term trends. How do you interpret these plots?
+
+```{r, fig.width= 8, fig.height = 8}
+bacteria %>% select(date, season, day_of_year, lna_ab_uml, lna_bv, lna_b, percent_lna_bb, temp_5_m_e2) %>% 
+  mutate(date = dmy(date), 
+         season = factor(season)) %>% 
+  pivot_longer(cols= c(lna_ab_uml:temp_5_m_e2), 
+               names_to = "variables", 
+               values_to = "values") %>% 
+  drop_na() %>% 
+  ggplot(aes(date, log10(values), color = variables))+
+  geom_point() +
+  geom_smooth(method = "lm")+
+  facet_wrap(.~variables, scales = "free", ncol = 1)+
+  labs(title = "Seasonal Variation of Bacteria")+
+  theme_bw()+
+  theme(legend.position = "none")
+```
+
+### Interpretation 
+
+- **‘LNA ab uml’ = LNA abundance (cells/mL)**, **‘LNA B’ = LNA total biomass (µgC/L)** and **‘%LNA BB’ = percent of total bacterial biomass** in the LNA fraction have been increasing ever the years.
+- **‘LNA bv’ = LNA mean cell size (cubic microns)** is experiencing a decline over the years. 
+- **Temperature (5m)** seem to remain fairly constant over extended time periods but shows signs of a slight increase overall. 
+
+## Question 3
+
+*Let’s create statistical models to test for long-term trends, as well as relationships with temperature. Because the sampling is monthly, with only a couple gaps, we can treat the time series as one measured at discrete intervals. To keep track of the sample order you’ll need to construct a new column which numbers each sample in the order they were sampled. i.e., the column should look like 1, 2, 3, 4, etc., where the numbers correspond to the month in the time series. You can use the year and month columns to construct this.*
+
+```{r}
+bacteria_id <- bacteria %>% arrange( year,month) %>% 
+  mutate(id = seq(c(1:length(month)))) %>% 
+  relocate(id, .before = year) %>% 
+  select(id, year, month, date, season, day_of_year, lna_abun = lna_ab_uml, 
+         lna_csize = lna_bv, lna_biomass = lna_b, lna_perc_biom= percent_lna_bb, temp = temp_5_m_e2) %>% 
+  mutate(date = dmy(date), 
+         season = factor(season))
+```
+
+**Use linear models to test for long term (linear) trends in the five variables: LNA abundance, LNA cell size, LNA biomass, LNA percent biomass, and temperature. For each of these models, assess whether the residuals show evidence of temporal autocorrelation. If autocorrelation is present, add a residual autocorrelation component to your model. Assess whether the model successfully accounted for autocorrelation. What have you learned from these models? Does accounting for autocorrelation change the results?**
+
+### Original models
+
+```{r}
+mod_abun <- lm(log10(lna_abun) ~ id, data = bacteria_id)
+mod_csize <- lm(log10(lna_csize) ~ id, data = bacteria_id)
+mod_biomass <- lm(log10(lna_biomass) ~ id, data = bacteria_id)
+mod_perc_biom <- lm(lna_perc_biom ~ id, data = bacteria_id)
+mod_temp <- lm(temp ~ id, data = bacteria_id)
+```
+
+
+```{r, fig.width = 8, fig.height = 12}
+res1 <- residuals(mod_abun)
+res2 <- residuals(mod_csize)
+res3 <- residuals(mod_biomass)
+res4 <- residuals(mod_perc_biom)
+res5 <- residuals(mod_temp)
+
+p1 <- ggAcf(res1) + labs(title = "ACF of residuals: LNA Abundance")
+p2 <- ggAcf(res2) + labs(title = "ACF of residuals: LNA Cell Size")
+p3 <- ggAcf(res3) + labs(title = "ACF of residuals: LNA Biomass")
+p4 <- ggAcf(res4) + labs(title = "ACF of residuals: LNA %biomass")
+p5 <- ggAcf(res5) + labs(title = "ACF of residuals: Temperature")
+
+p1 / p2 /p3 /p4 / p5
+```
+
+#### Interpretation
+
+- All the models have a strong peak at lag 1.
+- Cell size and temperature also have a peak at lag 2.
+
+### GLS models
+
+```{r}
+bacteria_NA <- bacteria_id %>%  drop_na()
+```
+
+```{r}
+mod_abun_std <- gls(log10(lna_abun) ~ 1, data = bacteria_NA, correlation = corAR1(form =~ id))
+mod_csize_std <- gls(log10(lna_csize) ~ 1, data = bacteria_NA, correlation = corAR1(form =~ id))
+mod_biomass_std <- gls(log10(lna_biomass) ~ 1, data = bacteria_NA, correlation = corAR1(form =~ id))
+mod_perc_biom_std <- gls(lna_perc_biom ~ 1, data = bacteria_NA, correlation = corAR1(form =~ id))
+mod_temp_std <- gls(temp ~ 1, data = bacteria_NA, correlation = corAR1(form =~ id))
+```
+
+```{r, fig.width = 8, fig.height = 12}
+res1 <- residuals(mod_abun_std, type = "normalized")
+res2 <- residuals(mod_csize_std, type = "normalized")
+res3 <- residuals(mod_biomass_std, type = "normalized")
+res4 <- residuals(mod_perc_biom_std, type = "normalized")
+res5 <- residuals(mod_temp_std, type = "normalized")
+
+p1 <- ggAcf(res1) + ggtitle("ACF of residuals: LNA Abundance")
+p2 <- ggAcf(res2) + ggtitle("ACF of residuals: LNA Cell Size")
+p3 <- ggAcf(res3) + ggtitle("ACF of residuals: LNA Biomass")
+p4 <- ggAcf(res4) + ggtitle("ACF of residuals: LNA %biomass")
+p5 <- ggAcf(res5) + ggtitle("ACF of residuals: Temperature")
+
+p1 / p2 /p3 /p4 / p5
+```
+
+
+#### Interpretation
+
+- GLS was able to correct the auto-correction in the LNA data but not in the temperature plot. 
+
+## Question 4
+
+*Perform a similar set of analyses using temperature as the predictor, to test whether temperature can explain variation in the four LNA metrics, and whether autocorrelation needs to be accounted for when testing these relationships. Make appropriate plots of the results and discuss the magnitude of the relationships. Considering the whole set of analyses, what are your interpretations of the dynamics and drivers of LNA bacteria in this system?*
+
+### LNA bacteria variations with temperature
+```{r, fig.width= 8, fig.height = 8}
+bacteria %>% select(date, season, day_of_year, lna_ab_uml, lna_bv, lna_b, percent_lna_bb, temp_5_m_e2) %>% 
+  mutate(date = dmy(date), 
+         season = factor(season)) %>% 
+  pivot_longer(cols= c(lna_ab_uml:percent_lna_bb), 
+               names_to = "variables", 
+               values_to = "values") %>% 
+  drop_na() %>% 
+  ggplot(aes(temp_5_m_e2, log10(values), color = variables))+
+  geom_point() +
+  geom_smooth(method = "lm")+
+  facet_wrap(.~variables, scales = "free", ncol = 1)+
+  labs(title = "Temperature Variation of Bacteria")+
+  theme_bw()+
+  theme(legend.position = "none")
+```
+
+
+
+### Original models
+
+```{r}
+mod_abun <- lm(log10(lna_abun) ~ temp, data = bacteria_id)
+mod_csize <- lm(log10(lna_csize) ~ temp, data = bacteria_id)
+mod_biomass <- lm(log10(lna_biomass) ~ temp, data = bacteria_id)
+mod_perc_biom <- lm(lna_perc_biom ~ temp, data = bacteria_id)
+
+```
+
+
+```{r, fig.width = 8, fig.height = 12}
+res1 <- residuals(mod_abun)
+res2 <- residuals(mod_csize)
+res3 <- residuals(mod_biomass)
+res4 <- residuals(mod_perc_biom)
+
+p1 <- ggAcf(res1) + labs(title = "ACF of residuals: LNA Abundance")
+p2 <- ggAcf(res2) + labs(title = "ACF of residuals: LNA Cell Size")
+p3 <- ggAcf(res3) + labs(title = "ACF of residuals: LNA Biomass")
+p4 <- ggAcf(res4) + labs(title = "ACF of residuals: LNA %biomass")
+
+p1 / p2 /p3 /p4 
+```
+
+#### Interpretation
+
+- There is a peak in lag 1 for LNA Cell Size and LNA % Biomass. Autocorrection should be accounted for those variations 
+
+### GLS models 
+
+```{r}
+mod_csize_std <- gls(log10(lna_csize) ~ 1, data = bacteria_NA, correlation = corAR1(form =~ temp))
+mod_perc_biom_std <- gls(lna_perc_biom ~ 1, data = bacteria_NA, correlation = corAR1(form =~ temp))
+
+```
+
+```{r, fig.width = 8, fig.height = 12}
+res1 <- residuals(mod_abun)
+res2 <- residuals(mod_csize_std, type = "normalized")
+res3 <- residuals(mod_biomass)
+res4 <- residuals(mod_perc_biom_std, type = "normalized")
+
+
+p1 <- ggAcf(res1) + ggtitle("ACF of residuals: LNA Abundance")
+p2 <- ggAcf(res2) + ggtitle("ACF of residuals: LNA Cell Size")
+p3 <- ggAcf(res3) + ggtitle("ACF of residuals: LNA Biomass")
+p4 <- ggAcf(res4) + ggtitle("ACF of residuals: LNA %biomass")
+
+p1 / p2 /p3 /p4
+```
+
+
+#### Interpretation
+- GLS was able to account for autocorrection. 
+- We can see that over long time periods, there is a clear seasonal cycle in LNA bacteria. Those seasonal variations are reflected in the temperature signal. 
+- The requirement for autocorrection over time may be due to the non-independent nature of biology. Abundance, cell number and biomass rely on the generation of the previous generation of bacteria.
+- Using temperature as a predictor, we can see that we only need to correct for the cell size and % biomass. This is unclear why...
+
