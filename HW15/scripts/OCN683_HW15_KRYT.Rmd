@@ -1,0 +1,232 @@
+---
+author: 'Keanu Rochette '
+date: '`r format(Sys.Date())`'
+title: HW 15 - Multivariate
+output: 
+  html_document: 
+    toc: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE)
+```
+
+## Load libraries
+```{r}
+# Data manipulation and visualization 
+library(tidyverse)
+library(here)
+library(janitor)
+library(patchwork)
+
+# Data analysis/statistics 
+library(car) #ANOVA
+library(ggResidpanel) #residual panel
+library(ggeffects)
+library(effects) #dependency for ggeffects
+library(vegan)
+```
+
+## Load data
+```{r}
+zoop <- read_csv(here("HW15", "data", "fishpond_zoop.csv"))
+zoop <- clean_names(zoop)
+```
+
+## Question 1
+
+*Start by characterizing how the environmental variables (columns 37:49) are correlated with each other across the ten sites, using a principal components analysis. Provide an appropriate plot and summary of the PCA results. What are the major patterns of variation across these sites?*
+
+```{r}
+envi_sub <- zoop %>% select(37:49) %>% na.omit()
+```
+
+```{r}
+envi_pca <- princomp(envi_sub, cor = TRUE)
+summary(envi_pca)
+#loadings(zoop_pca)
+#head(zoop_pca$scores, 5)
+```
+
+
+```{r, fig.width= 9, fig.height= 9}
+biplot(envi_pca, pch = 21, col = c('grey', 'blue'), scale = 0)
+```
+```{r}
+site <- zoop %>% select(site, 37:49) %>% na.omit %>% mutate(site = factor(site)) %>%  select(site)  
+site <- site$site
+```
+
+```{r, fig.width= 9, fig.height= 9}
+envi_pca2 <- rda(envi_sub, scale = TRUE)
+biplot(envi_pca2, col = c('red', 'blue'), type = c("text", "points"), cex = 2)
+
+ordihull(envi_pca2, groups = site, label = TRUE, col = 'green', border = 'black', alpha = 20, cex = 0.6, draw = 'polygon')
+```
+
+
+### Interpretation
+
+- Component 1 explains 47% of the variation,  Component 2 explains 18.3% of the variation, and Component 3 explains 13.6% of the variation. 
+- **Leaf chemistry**: On PC2, N and d13C covary and vary in the opposite way to C and d15N. On PC1, C and d15N vary in the opposite direction.
+- **Restoration variables**: All variable covary in the same direction on PC1. On PC2, pond area and non-mangrove shoreline co-vary, which makes sense because an area without mangrove opens space for pond area. They go in the opposite direction to % mangrove shoreline and mangrove shoreline. 
+- **Watershed variables**: % impervious and %develop co-vary which make sense, because increased developed areas typically entails an increased in impervious areas. They vary in opposite direction to %trees, relief and precipitation in PC1. 
+
+## Question 2
+
+*Next, characterize the major axes of variation in zooplankton community composition (i.e., an unconstrained ordination). Consider how to transform and standardize the community data before the analysis. Provide an appropriate plot and interpret what it means. Finally, use envfit() to assess which environmental variables are correlated with the major axes of community composition.*
+
+```{r}
+zoop_sub <- zoop %>% select(8:35) %>% na.omit()
+```
+
+### Zooplankton PCoA
+
+```{r}
+zoop_pca <- princomp(zoop_sub, cor = TRUE)
+summary(zoop_pca)
+```
+
+```{r, fig.width= 9, fig.height= 9}
+biplot(zoop_pca, pch = 21, col = c('grey', 'blue'), scale = 0)
+```
+
+```{r}
+zoop_sub_norm <- wisconsin(sqrt(zoop_sub))
+```
+
+```{r}
+zoop_pcoa <- dbrda(zoop_sub_norm ~ 1, dist = "bray", add = TRUE)
+summary(zoop_pcoa)
+```
+
+```{r, fig.width= 12, fig.height= 9}
+sppscores(zoop_pcoa) <- zoop_sub_norm
+plot(zoop_pcoa, type = 'n')
+points(zoop_pcoa, col = 'black', bg = 'grey', pch = 21)
+text(zoop_pcoa, display = "species", col = 'blue', cex = 0.8)
+```
+
+#### Interpretation
+
+- PC1 explains 12.2% of the variation and PC2 explains 10.6% of the variation of the data set.
+- In general, the taxa are pretty close together and in the center of the ordinartion indicating that there are probably marginal differences in their life strategies. However, there are a few taxa that are located away from the center such as the mantis shrimp, the other megalopa types, the shrip and the cumacean. These taxa probably have more differences in life strategies than the other groups.
+
+
+### Zooplankton NMDS
+```{r}
+zoop_ord <- metaMDS(zoop_sub_norm, dist = "bray", trymax = 20)
+```
+
+```{r}
+plot(zoop_ord, type = "text")
+```
+
+
+```{r}
+fit <- envfit(zoop_ord ~ mangrove_shoreline + non_mangrove_shoreline + percent_mangrove_shoreline+ 
+                pond_area + d13c+c + d15n + n+ relief + percent_trees +
+                precip + percent_impervious+ percent_developed, data = envi_sub, na.rm = T)
+colnames(envi_sub)
+```
+
+```{r, fig.width= 9, fig.height= 9}
+
+ordiplot(zoop_ord, display = "sites", type =  "n", main = 'NMDS 2D')
+points(zoop_ord, col = 'blue', pch = 19)
+plot(fit, col = 'darkgreen', arrow.mul = 0.7)
+abline(h = 0, col = "red", lty = 2) 
+abline(v= 0, col = "red", lty = 2) 
+
+```
+
+#### Interpretation
+
+- It looks like the presence/absence of mangroves and the pond area are important variables that are correlated with certain taxa. 
+- On the opposite direction, the % of trees and relief on the watershed are correlated with other taxa. The origin of that correlation is still unclear to me.
+
+## Question 3
+
+*Although envfit() is a useful tool, it does not directly ask how well community composition can be explained by a set of environmental variables.*  
+
+- *Use a constrained ordination to ask this question. How much of variation in community composition can be explained by the set of environmental variables?*
+- *How much can be explained by the first two axes? What do those axes represent (visualizing with a triplot will help)?*
+
+### Constrained Ordination
+```{r}
+zoop_dbrda <- dbrda(zoop_sub_norm ~ mangrove_shoreline + non_mangrove_shoreline + percent_mangrove_shoreline+
+                      pond_area + d13c+c + d15n + n+ relief + percent_trees +
+                      precip + percent_impervious+ percent_developed, 
+                    data = envi_sub, dist = "bray", add = TRUE)
+
+```
+
+```{r}
+sppscores(zoop_dbrda) <- zoop_sub_norm
+summary(zoop_dbrda)
+```
+
+
+```{r, fig.width= 9, fig.height= 9}
+plot(zoop_dbrda, display = "sites", type = 'n')
+points(zoop_dbrda, display = "sites", col = 'blue', pch = 19)
+text(zoop_dbrda, display = 'bp', col = 'darkgreen', cex = 1)
+```
+
+
+```{r, fig.width= 9, fig.height= 9}
+plot(zoop_dbrda, type = "n")  # Set up blank plot
+points(zoop_dbrda, display = "sites", col = "blue", pch = 19)
+text(zoop_dbrda, display = "species", cex = 0.7, col = "red")  # Optional
+text(zoop_dbrda, display = "bp", col = "darkgreen")  # Environmental arrows
+```
+
+
+#### Interpretation 
+
+- dbRDA1 explains 8.4% of the variations, dbRDA2 explains 7.7% of the variation. 
+- Environmental variables are clustering zooplankton community in 2 groups: 
+   - % mangrove shoreline and mangrove shoreline, pond area and non-mangrove shoreline associated communities; Relief and Carbon associated communities.
+   - Zooplankton like mantis shrimp, cumacean,and ostracod are highly associated with mangrove cover.
+   - Zooplankton like shrimp, fish, polychaete,and bivalves are associated with areas clear of mangroves.
+
+## Question 4
+
+*The authors were interested in whether zooplankton composition is affected by the presence of mangroves, and whether composition is affected by the presence of a fishpond.*  
+*Use a PERMANOVA to test these questions. Considering all the results together, what have you learned about this system?*
+
+```{r}
+location <- zoop %>% select(fishpond, mangrove)
+```
+
+
+```{r}
+zoop_permanova <- adonis2(zoop_sub_norm ~ fishpond + mangrove, data = location, by = "margin")
+
+zoop_permanova
+```
+
+### Interpretation
+
+- The presence of a fishpond significantly affects the structure of zooplankton communities (p<0.05).
+- The mangrove status show non significant results. 
+- This means that the presence of a fishpond is more important in determining the zooplankton communities than the presence or absence of mangrove.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
